@@ -61,10 +61,12 @@ frontend                       Vue 3 + Vite; сборка встраиваетс
 
 Подробная инструкция по развёртыванию без клонирования репозитория: [docs/deploy.md](docs/deploy.md).
 
-Образы собирает GitHub Actions (`.github/workflows/build.yml`) при каждом пуше в `main` и публикует в GHCR:
-`ghcr.io/compico/tw-srv-twitch-auth` и `ghcr.io/compico/tw-srv-memealerts` (теги `latest`, `sha-xxxxxxx`, при теге `vX.Y.Z` ещё версия).
-Для запуска достаточно `docker-compose.yml` и `.env`. Обновление: `docker compose pull && docker compose up -d`.
-Закрепить версию: `TAG=sha-xxxxxxx` в `.env`. Локальная сборка: `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`.
+Образы собирает GitHub Actions (`.github/workflows/build.yml`) только при создании тега версии `vX.Y.Z` и публикует их в GHCR:
+`ghcr.io/compico/tw-srv-twitch-auth` и `ghcr.io/compico/tw-srv-memealerts`. Для тега `v1.2.3` создаются теги образа `v1.2.3`, `v1.2` и `v1`.
+В `docker-compose.yml` указан `:v1`, поэтому `docker compose pull && docker compose up -d` подтягивает последнюю версию 1.x.
+Для запуска достаточно `docker-compose.yml` и `.env`. Локальная сборка: `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`.
+
+Выпуск версии: `git tag v1.0.1 && git push origin v1.0.1`.
 
 Правила Traefik: `Host(DOMAIN) && PathPrefix(/auth)` → twitch-auth (приоритет выше), остальное → memealerts.
 Cookie сессии ставится на домен без атрибута Domain, поэтому оба сервиса должны жить на одном хосте.

@@ -4,7 +4,7 @@ name: tw-srv
 # gRPC (twitch-auth:9090) доступен только внутри сети compose, наружу не публикуется.
 services:
   twitch-auth:
-    image: ghcr.io/compico/tw-srv-twitch-auth:${TAG:-latest}
+    image: ghcr.io/compico/tw-srv-twitch-auth:v1
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -27,7 +27,7 @@ services:
       traefik.http.services.oc-auth.loadbalancer.server.port: "8081"
 
   memealerts:
-    image: ghcr.io/compico/tw-srv-memealerts:${TAG:-latest}
+    image: ghcr.io/compico/tw-srv-memealerts:v1
     pull_policy: always
     restart: unless-stopped
     depends_on: [twitch-auth]

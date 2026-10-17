@@ -1,11 +1,9 @@
 name: build
 
+# Сборка запускается только при создании тега версии: v1.0.0, v1.2.3 и т. д.
 on:
   push:
-    branches: [main]
-    tags: ["v*"]
-  pull_request:
-  workflow_dispatch:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 permissions:
   contents: read
@@ -18,14 +16,14 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -47,7 +45,7 @@ jobs:
 
       # go.sum и сгенерированный код можно забрать из артефакта и закоммитить,
       # чтобы сборка стала воспроизводимой.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: go-generated
           path: |
@@ -56,10 +54,9 @@ jobs:
             internal/authpb/
           if-no-files-found: error
 
-  # Публикация двух образов в GHCR. Только для main и тегов.
+  # Публикация двух образов в GHCR.
   images:
     needs: check
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -69,27 +66,28 @@ jobs:
       matrix:
         service: [twitch-auth, memealerts]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/tw-srv-${{ matrix.service }}
+          # Для тега v1.2.3 публикуются v1.2.3, v1.2 и v1.
+          flavor: latest=false
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,format=short
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
+            type=semver,pattern=v{{major}}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           target: ${{ matrix.service }}

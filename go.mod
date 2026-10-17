@@ -1,4 +1,4 @@
-module github.com/compico/overlaycomposer
+module github.com/compico/tw-srv
 
 go 1.26.0
 

@@ -12,7 +12,7 @@ import (
 
 	"github.com/fasthttp/websocket"
 
-	"github.com/compico/overlaycomposer/internal/platform/httpx"
+	"github.com/compico/tw-srv/internal/platform/httpx"
 )
 
 const (

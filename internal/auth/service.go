@@ -16,8 +16,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/compico/overlaycomposer/internal/platform/secretbox"
-	"github.com/compico/overlaycomposer/internal/twitch"
+	"github.com/compico/tw-srv/internal/platform/secretbox"
+	"github.com/compico/tw-srv/internal/twitch"
 )
 
 var (

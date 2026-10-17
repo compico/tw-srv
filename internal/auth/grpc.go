@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/compico/overlaycomposer/internal/authpb"
-	"github.com/compico/overlaycomposer/internal/twitch"
+	"github.com/compico/tw-srv/internal/authpb"
+	"github.com/compico/tw-srv/internal/twitch"
 )
 
 // GRPCServer: внутренний API сервиса twitch-auth для сервиса memealerts.

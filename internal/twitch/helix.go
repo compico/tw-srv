@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/compico/overlaycomposer/internal/platform/httpx"
+	"github.com/compico/tw-srv/internal/platform/httpx"
 )
 
 const helixBase = "https://api.twitch.tv/helix"

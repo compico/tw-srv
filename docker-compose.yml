@@ -1,6 +1,11 @@
+name: tw-srv
+
+# Два сервиса, у каждого своя SQLite в своём томе.
+# gRPC (twitch-auth:9090) доступен только внутри сети compose, наружу не публикуется.
 services:
   twitch-auth:
-    build: { context: ., target: twitch-auth }
+    image: ghcr.io/compico/tw-srv-twitch-auth:${TAG:-latest}
+    pull_policy: always
     restart: unless-stopped
     environment:
       PUBLIC_URL: https://${DOMAIN}
@@ -22,7 +27,8 @@ services:
       traefik.http.services.oc-auth.loadbalancer.server.port: "8081"
 
   memealerts:
-    build: { context: ., target: memealerts }
+    image: ghcr.io/compico/tw-srv-memealerts:${TAG:-latest}
+    pull_policy: always
     restart: unless-stopped
     depends_on: [twitch-auth]
     environment:

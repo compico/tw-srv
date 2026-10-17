@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/compico/overlaycomposer/internal/twitch"
+	"github.com/compico/tw-srv/internal/twitch"
 )
 
 // Manager держит по одному слушателю EventSub на стримера с включённой наградой.

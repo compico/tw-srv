@@ -15,13 +15,13 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/compico/overlaycomposer/internal/authclient"
-	"github.com/compico/overlaycomposer/internal/memealert"
-	"github.com/compico/overlaycomposer/internal/platform/config"
-	"github.com/compico/overlaycomposer/internal/platform/secretbox"
-	"github.com/compico/overlaycomposer/internal/platform/sqlitedb"
-	"github.com/compico/overlaycomposer/internal/platform/view"
-	"github.com/compico/overlaycomposer/internal/twitch"
+	"github.com/compico/tw-srv/internal/authclient"
+	"github.com/compico/tw-srv/internal/memealert"
+	"github.com/compico/tw-srv/internal/platform/config"
+	"github.com/compico/tw-srv/internal/platform/secretbox"
+	"github.com/compico/tw-srv/internal/platform/sqlitedb"
+	"github.com/compico/tw-srv/internal/platform/view"
+	"github.com/compico/tw-srv/internal/twitch"
 )
 
 func main() {

@@ -17,12 +17,12 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"google.golang.org/grpc"
 
-	"github.com/compico/overlaycomposer/internal/auth"
-	"github.com/compico/overlaycomposer/internal/authpb"
-	"github.com/compico/overlaycomposer/internal/platform/config"
-	"github.com/compico/overlaycomposer/internal/platform/secretbox"
-	"github.com/compico/overlaycomposer/internal/platform/sqlitedb"
-	"github.com/compico/overlaycomposer/internal/twitch"
+	"github.com/compico/tw-srv/internal/auth"
+	"github.com/compico/tw-srv/internal/authpb"
+	"github.com/compico/tw-srv/internal/platform/config"
+	"github.com/compico/tw-srv/internal/platform/secretbox"
+	"github.com/compico/tw-srv/internal/platform/sqlitedb"
+	"github.com/compico/tw-srv/internal/twitch"
 )
 
 func main() {

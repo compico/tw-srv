@@ -11,8 +11,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/compico/overlaycomposer/internal/platform/httpx"
-	"github.com/compico/overlaycomposer/internal/twitch"
+	"github.com/compico/tw-srv/internal/platform/httpx"
+	"github.com/compico/tw-srv/internal/twitch"
 )
 
 const (

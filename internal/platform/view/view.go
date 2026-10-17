@@ -20,7 +20,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/olivere/vite"
 
-	"github.com/compico/overlaycomposer/frontend"
+	"github.com/compico/tw-srv/frontend"
 )
 
 // entryPoint должен совпадать с build.rollupOptions.input в vite.config.ts.

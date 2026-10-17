@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package auth.v1;
 
-option go_package = "github.com/compico/overlaycomposer/internal/authpb;authpb";
+option go_package = "github.com/compico/tw-srv/internal/authpb;authpb";
 
 // AuthService живёт в сервисе twitch-auth и доступен только внутри docker-сети.
 // Аутентификация вызовов: metadata "authorization: Bearer <GRPC_SHARED_SECRET>".

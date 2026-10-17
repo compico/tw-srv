@@ -1,0 +1,7 @@
+# Локальная сборка вместо готовых образов:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+services:
+  twitch-auth:
+    build: { context: ., target: twitch-auth }
+  memealerts:
+    build: { context: ., target: memealerts }

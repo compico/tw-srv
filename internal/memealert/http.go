@@ -11,8 +11,8 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/compico/overlaycomposer/internal/platform/view"
-	"github.com/compico/overlaycomposer/internal/twitch"
+	"github.com/compico/tw-srv/internal/platform/view"
+	"github.com/compico/tw-srv/internal/twitch"
 )
 
 type HTTPConfig struct {

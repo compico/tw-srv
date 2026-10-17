@@ -19,8 +19,8 @@ COPY . .
 # Свежесобранный бандл заменяет заглушку, он попадёт в бинарник через go:embed.
 COPY --from=web /src/frontend/dist/ ./frontend/dist/
 RUN mkdir -p internal/authpb && protoc -I proto \
-      --go_out=. --go_opt=module=github.com/compico/overlaycomposer \
-      --go-grpc_out=. --go-grpc_opt=module=github.com/compico/overlaycomposer \
+      --go_out=. --go_opt=module=github.com/compico/tw-srv \
+      --go-grpc_out=. --go-grpc_opt=module=github.com/compico/tw-srv \
       proto/auth/v1/auth.proto
 RUN go mod tidy && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/twitch-auth ./cmd/twitch-auth && \

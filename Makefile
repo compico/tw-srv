@@ -8,8 +8,8 @@ proto:
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	mkdir -p internal/authpb
 	protoc -I proto \
-	  --go_out=. --go_opt=module=github.com/compico/overlaycomposer \
-	  --go-grpc_out=. --go-grpc_opt=module=github.com/compico/overlaycomposer \
+	  --go_out=. --go_opt=module=github.com/compico/tw-srv \
+	  --go-grpc_out=. --go-grpc_opt=module=github.com/compico/tw-srv \
 	  proto/auth/v1/auth.proto
 
 tidy:

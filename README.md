@@ -57,7 +57,7 @@ frontend                       Vue 3 + Vite; сборка встраиваетс
 2. Приложение MemeAlerts (по документации регистрируется через поддержку), Redirect URI `https://<DOMAIN>/api/memealerts/callback`.
 3. `cp .env.example .env`, заполнить; ключи и секрет: `openssl rand -hex 32`.
 4. Один раз локально: `make setup` (генерирует gRPC-код, `go mod tidy`) и закоммитьте `go.sum`.
-5. `docker compose up -d`. Нужна внешняя сеть traefik (`docker network create traefik`, имя в `TRAEFIK_NETWORK`).
+5. `docker compose up -d`. Нужна внешняя сеть Traefik (по умолчанию `proxy`, имя в `TRAEFIK_NETWORK`).
 
 Подробная инструкция по развёртыванию без клонирования репозитория: [docs/deploy.md](docs/deploy.md).
 
@@ -68,7 +68,7 @@ frontend                       Vue 3 + Vite; сборка встраиваетс
 
 Выпуск версии: `git tag v1.0.1 && git push origin v1.0.1`.
 
-Правила Traefik: `Host(DOMAIN) && PathPrefix(/auth)` → twitch-auth (приоритет выше), остальное → memealerts.
+Правила Traefik: `Host(DOMAIN) && PathPrefix(/auth)` → twitch-auth (приоритет выше), остальное → memealerts. HTTP редиректится на HTTPS (`https-redirect@file`), по HTTPS подключаются `default-headers@file` и certresolver `cloudflare`. Все эти имена переопределяются в `.env`, см. `.env.example`.
 Cookie сессии ставится на домен без атрибута Domain, поэтому оба сервиса должны жить на одном хосте.
 
 ## Разработка фронтенда

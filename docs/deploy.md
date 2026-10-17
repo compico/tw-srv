@@ -5,7 +5,7 @@
 ## Что понадобится
 
 - Сервер с Docker и Docker Compose v2.
-- Traefik в Docker с HTTPS и внешней сетью (по умолчанию `traefik`, entrypoint `websecure`, certresolver `letsencrypt`).
+- Traefik в Docker с внешней сетью `proxy`, entrypoints `web` и `websecure`, certresolver `cloudflare` и middleware из файловой конфигурации `https-redirect@file` и `default-headers@file`. Это значения по умолчанию, их можно переопределить в `.env`.
 - Домен, A/AAAA-запись которого указывает на сервер. Оба сервиса работают на одном домене: Traefik отправляет `/auth/*` в `twitch-auth`, остальное в `memealerts`.
 
 ## 1. Зарегистрируйте приложения
@@ -37,7 +37,7 @@ curl -fsSL  https://raw.githubusercontent.com/compico/tw-srv/main/.env.example -
 | `MEMEALERTS_CLIENT_ID`, `MEMEALERTS_CLIENT_SECRET` | из приложения MemeAlerts |
 | `AUTH_ENCRYPTION_KEY`, `MEMEALERTS_ENCRYPTION_KEY` | ключи шифрования токенов в базах, у каждого сервиса свой |
 | `GRPC_SHARED_SECRET` | секрет для связи сервисов между собой |
-| `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINT`, `TRAEFIK_CERTRESOLVER` | имена из вашей конфигурации Traefik, если они отличаются от значений по умолчанию |
+| `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINT_HTTP`, `TRAEFIK_ENTRYPOINT`, `TRAEFIK_CERTRESOLVER`, `TRAEFIK_MIDDLEWARES`, `TRAEFIK_REDIRECT_MIDDLEWARE` | необязательные, имена из вашей конфигурации Traefik, если они отличаются от значений по умолчанию (`proxy`, `web`, `websecure`, `cloudflare`, `default-headers@file`, `https-redirect@file`) |
 
 Ключи и секрет генерируются так (по одному значению на каждую переменную):
 
@@ -50,7 +50,7 @@ openssl rand -hex 32
 ## 4. Запустите
 
 ```bash
-docker network ls | grep traefik      # сеть Traefik должна существовать
+docker network ls | grep proxy        # сеть Traefik должна существовать
 docker compose pull
 docker compose up -d
 docker compose logs -f
@@ -90,7 +90,7 @@ docker compose start
 | Симптом | Причина и решение |
 |---|---|
 | `pull access denied` / `unauthorized` при `docker compose pull` | Образы в GHCR приватные. Владелец репозитория делает пакеты публичными (Packages → пакет → Package settings → Change visibility) либо вы выполняете `docker login ghcr.io` |
-| `network traefik declared as external, but could not be found` | Создайте сеть (`docker network create traefik`) или задайте её имя в `TRAEFIK_NETWORK` |
+| `network proxy declared as external, but could not be found` | Создайте сеть (`docker network create proxy`) или задайте её имя в `TRAEFIK_NETWORK` |
 | Twitch: `redirect_mismatch` | Redirect URL в приложении Twitch должен точно совпадать с `https://ВАШ_ДОМЕН/auth/twitch/callback` |
 | После входа через Twitch снова просит войти | Сайт открыт по `http`, а cookie помечена Secure. Используйте HTTPS. Оба сервиса должны быть на одном домене |
 | В панели «Сервис авторизации недоступен» | Проверьте `docker compose logs twitch-auth` и что `GRPC_SHARED_SECRET` одинаковый у обоих сервисов (он берётся из одного `.env`) |

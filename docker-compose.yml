@@ -8,7 +8,7 @@ services:
     pull_policy: always
     restart: unless-stopped
     environment:
-      PUBLIC_URL: https://${DOMAIN}
+      PUBLIC_URL: https://${DOMAIN:?укажите DOMAIN в .env}
       TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID}
       TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET}
       TOKEN_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY}
@@ -16,14 +16,17 @@ services:
       DB_PATH: /data/auth.db
     volumes:
       - auth-data:/data
-    networks: [internal, traefik]
+    networks: [internal, proxy]
     labels:
       traefik.enable: "true"
-      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
-      traefik.http.routers.oc-auth.rule: Host(`${DOMAIN}`) && PathPrefix(`/auth`)
-      traefik.http.routers.oc-auth.priority: "100"
-      traefik.http.routers.oc-auth.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
-      traefik.http.routers.oc-auth.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.docker.network: ${TRAEFIK_NETWORK:-proxy}
+      # /auth/* только по HTTPS; редирект с HTTP делает роутер memealerts (он ловит весь хост)
+      traefik.http.routers.oc-auth-secure.rule: Host(`${DOMAIN}`) && PathPrefix(`/auth`)
+      traefik.http.routers.oc-auth-secure.priority: "100"
+      traefik.http.routers.oc-auth-secure.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.oc-auth-secure.tls: "true"
+      traefik.http.routers.oc-auth-secure.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-cloudflare}
+      traefik.http.routers.oc-auth-secure.middlewares: ${TRAEFIK_MIDDLEWARES:-default-headers@file}
       traefik.http.services.oc-auth.loadbalancer.server.port: "8081"
 
   memealerts:
@@ -32,7 +35,7 @@ services:
     restart: unless-stopped
     depends_on: [twitch-auth]
     environment:
-      PUBLIC_URL: https://${DOMAIN}
+      PUBLIC_URL: https://${DOMAIN:?укажите DOMAIN в .env}
       AUTH_GRPC_ADDR: twitch-auth:9090
       GRPC_SHARED_SECRET: ${GRPC_SHARED_SECRET}
       MEMEALERTS_CLIENT_ID: ${MEMEALERTS_CLIENT_ID}
@@ -41,14 +44,21 @@ services:
       DB_PATH: /data/memealerts.db
     volumes:
       - memealerts-data:/data
-    networks: [internal, traefik]
+    networks: [internal, proxy]
     labels:
       traefik.enable: "true"
-      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      traefik.docker.network: ${TRAEFIK_NETWORK:-proxy}
+      # HTTP → редирект на HTTPS (для всего хоста, включая /auth)
       traefik.http.routers.oc-app.rule: Host(`${DOMAIN}`)
-      traefik.http.routers.oc-app.priority: "10"
-      traefik.http.routers.oc-app.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
-      traefik.http.routers.oc-app.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.routers.oc-app.entrypoints: ${TRAEFIK_ENTRYPOINT_HTTP:-web}
+      traefik.http.routers.oc-app.middlewares: ${TRAEFIK_REDIRECT_MIDDLEWARE:-https-redirect@file}
+      # HTTPS
+      traefik.http.routers.oc-app-secure.rule: Host(`${DOMAIN}`)
+      traefik.http.routers.oc-app-secure.priority: "10"
+      traefik.http.routers.oc-app-secure.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.oc-app-secure.tls: "true"
+      traefik.http.routers.oc-app-secure.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-cloudflare}
+      traefik.http.routers.oc-app-secure.middlewares: ${TRAEFIK_MIDDLEWARES:-default-headers@file}
       traefik.http.services.oc-app.loadbalancer.server.port: "8080"
 
 volumes:
@@ -57,6 +67,6 @@ volumes:
 
 networks:
   internal:
-  traefik:
+  proxy:
     external: true
-    name: ${TRAEFIK_NETWORK:-traefik}
+    name: ${TRAEFIK_NETWORK:-proxy}

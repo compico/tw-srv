@@ -35,10 +35,20 @@ func (r *Repository) SaveAccount(ctx context.Context, a *Account) error {
 
 func (r *Repository) UpdateAccountTokens(ctx context.Context, twitchUserID, accessEnc, refreshEnc string, expiresAt time.Time) error {
 	return r.db.WithContext(ctx).Model(&Account{}).Where("twitch_user_id = ?", twitchUserID).Updates(map[string]any{
-		"access_token_enc":  accessEnc,
-		"refresh_token_enc": refreshEnc,
-		"expires_at":        expiresAt,
+		"access_token_enc":   accessEnc,
+		"refresh_token_enc":  refreshEnc,
+		"expires_at":         expiresAt,
+		"token_refreshed_at": time.Now(),
 	}).Error
+}
+
+// ListAccountsToRefresh: подключённые аккаунты, токен которых давно не обновлялся.
+func (r *Repository) ListAccountsToRefresh(ctx context.Context, before time.Time) ([]Account, error) {
+	var out []Account
+	err := r.db.WithContext(ctx).
+		Where("invalid = ? AND (token_refreshed_at IS NULL OR token_refreshed_at < ?)", false, before).
+		Find(&out).Error
+	return out, err
 }
 
 func (r *Repository) SetAccountInvalid(ctx context.Context, twitchUserID string, invalid bool) error {

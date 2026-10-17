@@ -26,6 +26,11 @@ var (
 )
 
 type Config struct {
+	// AllowedReturnOrigins: сайты, на которые можно вернуть пользователя после входа
+	// (например, https://memealerts.example.com). Нужно при работе сервисов на разных доменах.
+	AllowedReturnOrigins []string
+	// DefaultReturn: куда вести, если return_to не передан или недопустим.
+	DefaultReturn string
 	Scopes        []string
 	SessionTTL    time.Duration
 	RefreshSkew   time.Duration // обновлять токен, если до истечения осталось меньше
@@ -49,14 +54,6 @@ func NewService(repo *Repository, tw *twitch.OAuth, box *secretbox.Box, cfg Conf
 		cfg.ValidateEvery = time.Hour
 	}
 	return &Service{repo: repo, tw: tw, box: box, cfg: cfg, log: log}
-}
-
-// SafeReturnTo пропускает только локальные пути (защита от open redirect).
-func SafeReturnTo(p string) string {
-	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.HasPrefix(p, "/\\") {
-		return "/"
-	}
-	return p
 }
 
 func randomToken(n int) (string, error) {
@@ -83,7 +80,7 @@ func (s *Service) BeginLogin(ctx context.Context, returnTo string) (authURL, sta
 	if err != nil {
 		return "", "", err
 	}
-	ls := &LoginState{State: state, ReturnTo: SafeReturnTo(returnTo), ExpiresAt: time.Now().Add(10 * time.Minute)}
+	ls := &LoginState{State: state, ReturnTo: SafeReturn(returnTo, s.cfg.AllowedReturnOrigins, s.cfg.DefaultReturn), ExpiresAt: time.Now().Add(10 * time.Minute)}
 	if err := s.repo.SaveState(ctx, ls); err != nil {
 		return "", "", err
 	}

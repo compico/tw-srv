@@ -173,6 +173,7 @@ func (s *Service) CompleteConnect(ctx context.Context, id twitch.Identity, state
 	acc.AccessTokenEnc = accessEnc
 	acc.RefreshTokenEnc = refreshEnc
 	acc.ExpiresAt = time.Now().Add(time.Duration(pair.ExpiresIn) * time.Second)
+	acc.TokenRefreshedAt = time.Now()
 	acc.Invalid = false
 	if err := s.repo.SaveAccount(ctx, acc); err != nil {
 		return err
@@ -231,6 +232,13 @@ func (s *Service) maAccessToken(ctx context.Context, userID, stale string) (stri
 		return access, nil
 	}
 
+	return s.refreshMALocked(ctx, acc)
+}
+
+// refreshMALocked обменивает refresh token MemeAlerts на новую пару. Вызывать под maLocks[userID].
+// Refresh token одноразовый: новый сохраняем сразу, до любых дальнейших вызовов.
+func (s *Service) refreshMALocked(ctx context.Context, acc *Account) (string, error) {
+	userID := acc.TwitchUserID
 	refresh, err := s.box.Open(acc.RefreshTokenEnc)
 	if err != nil {
 		return "", fmt.Errorf("decrypt refresh token: %w", err)
@@ -252,12 +260,67 @@ func (s *Service) maAccessToken(ctx context.Context, userID, stale string) (stri
 	if err != nil {
 		return "", err
 	}
-	// Новый refresh token сохраняем до того, как продолжать работу.
 	exp := time.Now().Add(time.Duration(pair.ExpiresIn) * time.Second)
 	if err := s.repo.UpdateAccountTokens(ctx, userID, accessEnc, refreshEnc, exp); err != nil {
 		return "", err
 	}
 	return pair.AccessToken, nil
+}
+
+const (
+	// Refresh token MemeAlerts живёт 30 дней и действует только пока им пользуются.
+	// Обновляем раз в сутки, чтобы подключение не истекало, даже если наградой давно не пользовались.
+	maRefreshEvery = 24 * time.Hour
+	maRefreshTick  = 15 * time.Minute
+)
+
+// RunTokenRefresher в фоне поддерживает токены MemeAlerts живыми. Блокируется до отмены ctx.
+func (s *Service) RunTokenRefresher(ctx context.Context) {
+	t := time.NewTicker(maRefreshTick)
+	defer t.Stop()
+	s.refreshStaleMA(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			s.refreshStaleMA(ctx)
+		}
+	}
+}
+
+func (s *Service) refreshStaleMA(ctx context.Context) {
+	accs, err := s.repo.ListAccountsToRefresh(ctx, time.Now().Add(-maRefreshEvery))
+	if err != nil {
+		s.log.Error("list memealerts accounts to refresh", "err", err)
+		return
+	}
+	for _, a := range accs {
+		if ctx.Err() != nil {
+			return
+		}
+		s.keepAliveMA(ctx, a.TwitchUserID)
+	}
+}
+
+func (s *Service) keepAliveMA(ctx context.Context, userID string) {
+	mu := lockFor(&s.maLocks, userID)
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Перечитываем под блокировкой: токен мог обновиться, пока мы ждали.
+	acc, err := s.repo.GetAccount(ctx, userID)
+	if err != nil || acc.Invalid || time.Since(acc.TokenRefreshedAt) < maRefreshEvery {
+		return
+	}
+	if _, err := s.refreshMALocked(ctx, acc); err != nil {
+		if errors.Is(err, ErrMemeAlertsReauth) {
+			return // уже помечено, стримеру покажем «подключите заново»
+		}
+		s.log.Warn("background memealerts refresh failed", "user", userID, "err", err)
+		return
+	}
+	s.log.Info("memealerts token refreshed", "user", userID)
 }
 
 // callMA выполняет вызов API MemeAlerts от имени стримера; при 401 один раз обновляет токен и повторяет.

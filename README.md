@@ -6,8 +6,9 @@
 ## Устройство
 
 ```
- браузер ──► traefik ─┬─ /auth/*  ──► twitch-auth  (Twitch OAuth, сессии, refresh токенов)  ── auth.db
-                      └─ всё остальное ► memealerts (панель, награды, EventSub, MemeAlerts API) ── memealerts.db
+ браузер ──► traefik ─┬─ AUTH_DOMAIN ──► twitch-auth  (Twitch OAuth, сессии, refresh токенов Twitch) ── auth.db
+                      └─ APP_DOMAIN  ──► memealerts   (панель, награды, EventSub, MemeAlerts API,
+                                              │        refresh токенов MemeAlerts)               ── memealerts.db
                                               │  gRPC (внутренняя сеть compose)
                                               └──────► twitch-auth: ValidateSession, GetAccessToken
 ```
@@ -53,8 +54,8 @@ frontend                       Vue 3 + Vite; сборка встраиваетс
 
 ## Запуск
 
-1. Приложение Twitch: https://dev.twitch.tv/console/apps, Redirect URL `https://<DOMAIN>/auth/twitch/callback`.
-2. Приложение MemeAlerts (по документации регистрируется через поддержку), Redirect URI `https://<DOMAIN>/api/memealerts/callback`.
+1. Приложение Twitch: https://dev.twitch.tv/console/apps, Redirect URL `https://<AUTH_DOMAIN>/auth/twitch/callback`.
+2. Приложение MemeAlerts (по документации регистрируется через поддержку), Redirect URI `https://<APP_DOMAIN>/api/memealerts/callback`.
 3. `cp .env.example .env`, заполнить; ключи и секрет: `openssl rand -hex 32`.
 4. Один раз локально: `make setup` (генерирует gRPC-код, `go mod tidy`) и закоммитьте `go.sum`.
 5. `docker compose up -d`. Нужна внешняя сеть Traefik (по умолчанию `proxy`, имя в `TRAEFIK_NETWORK`).
@@ -68,8 +69,8 @@ frontend                       Vue 3 + Vite; сборка встраиваетс
 
 Выпуск версии: `git tag v1.0.1 && git push origin v1.0.1`.
 
-Правила Traefik: `Host(DOMAIN) && PathPrefix(/auth)` → twitch-auth (приоритет выше), остальное → memealerts. HTTP редиректится на HTTPS (`https-redirect@file`), по HTTPS подключаются `default-headers@file` и certresolver `cloudflare`. Все эти имена переопределяются в `.env`, см. `.env.example`.
-Cookie сессии ставится на домен без атрибута Domain, поэтому оба сервиса должны жить на одном хосте.
+Правила Traefik: `Host(AUTH_DOMAIN)` → twitch-auth, `Host(APP_DOMAIN)` → memealerts. HTTP редиректится на HTTPS (`https-redirect@file`), по HTTPS подключаются `default-headers@file` и certresolver `cloudflare`. Все эти имена переопределяются в `.env`, см. `.env.example`.
+Cookie сессии ставит twitch-auth с атрибутом `Domain=COOKIE_DOMAIN` (общий родитель двух доменов), поэтому её видит и memealerts. Учтите, что cookie уходит и на остальные поддомены этого родителя, если на них есть другие сервисы. Возврат после входа разрешён только на `APP_DOMAIN`.
 
 ## Разработка фронтенда
 

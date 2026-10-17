@@ -47,9 +47,19 @@ func run() error {
 	cookieName := env.String("SESSION_COOKIE", "oc_session")
 	cookieSecure := env.Bool("COOKIE_SECURE", true)
 	sessionTTL := env.Duration("SESSION_TTL", 30*24*time.Hour)
+	cookieDomain := env.String("COOKIE_DOMAIN", "")
+	returnOrigins := env.List("ALLOWED_RETURN_ORIGINS", nil)
 	scopes := env.List("TWITCH_SCOPES", []string{"channel:manage:redemptions"})
 	if err := env.Err(); err != nil {
 		return err
+	}
+
+	for i, o := range returnOrigins {
+		returnOrigins[i] = strings.TrimRight(o, "/")
+	}
+	defaultReturn := ""
+	if len(returnOrigins) > 0 {
+		defaultReturn = returnOrigins[0] + "/"
 	}
 
 	box, err := secretbox.New(encKey)
@@ -66,7 +76,7 @@ func run() error {
 	}
 
 	tw := twitch.NewOAuth(clientID, clientSecret, publicURL+"/auth/twitch/callback")
-	svc := auth.NewService(repo, tw, box, auth.Config{Scopes: scopes, SessionTTL: sessionTTL}, log)
+	svc := auth.NewService(repo, tw, box, auth.Config{Scopes: scopes, SessionTTL: sessionTTL, AllowedReturnOrigins: returnOrigins, DefaultReturn: defaultReturn}, log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -94,7 +104,7 @@ func run() error {
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	})
-	auth.NewHTTP(svc, auth.HTTPConfig{CookieName: cookieName, CookieSecure: cookieSecure, SessionTTL: sessionTTL}, log).Register(app)
+	auth.NewHTTP(svc, auth.HTTPConfig{CookieName: cookieName, CookieDomain: cookieDomain, CookieSecure: cookieSecure, SessionTTL: sessionTTL, DefaultReturn: defaultReturn}, log).Register(app)
 	go func() {
 		log.Info("http listening", "addr", httpAddr)
 		if err := app.Listen(httpAddr, fiber.ListenConfig{DisableStartupMessage: true}); err != nil && !errors.Is(err, http.ErrServerClosed) {

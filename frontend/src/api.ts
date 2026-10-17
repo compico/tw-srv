@@ -63,5 +63,5 @@ export const api = {
   deleteReward: () => request<void>('DELETE', '/api/reward'),
   disconnectMemeAlerts: () => request<void>('DELETE', '/api/memealerts'),
   redemptions: () => request<Redemption[]>('GET', '/api/redemptions?limit=50'),
-  logout: () => request<void>('POST', '/auth/logout'),
+  logout: () => request<void>('POST', '/api/logout'),
 }

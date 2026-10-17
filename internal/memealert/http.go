@@ -1,6 +1,7 @@
 package memealert
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -15,20 +16,29 @@ import (
 	"github.com/compico/tw-srv/internal/twitch"
 )
 
+// Sessions: проверка и завершение сессий (клиент к сервису twitch-auth).
+type Sessions interface {
+	twitch.SessionValidator
+	Logout(ctx context.Context, sessionID string) error
+}
+
 type HTTPConfig struct {
-	CookieName   string // имя cookie сессии (его выставляет сервис twitch-auth)
-	CookieSecure bool
-	View         *view.View // HTML-оболочка и ассеты Vite
+	CookieName    string // имя cookie сессии (его выставляет сервис twitch-auth)
+	CookieDomain  string // должен совпадать с COOKIE_DOMAIN сервиса twitch-auth
+	AuthPublicURL string // публичный адрес сервиса twitch-auth, например https://tw.example.com
+	PublicURL     string // публичный адрес этого сервиса
+	CookieSecure  bool
+	View          *view.View // HTML-оболочка и ассеты Vite
 }
 
 type HTTP struct {
 	svc      *Service
-	sessions twitch.SessionValidator
+	sessions Sessions
 	cfg      HTTPConfig
 	log      *slog.Logger
 }
 
-func NewHTTP(svc *Service, sessions twitch.SessionValidator, cfg HTTPConfig, log *slog.Logger) *HTTP {
+func NewHTTP(svc *Service, sessions Sessions, cfg HTTPConfig, log *slog.Logger) *HTTP {
 	return &HTTP{svc: svc, sessions: sessions, cfg: cfg, log: log}
 }
 
@@ -39,6 +49,10 @@ const (
 
 func (h *HTTP) Register(app *fiber.App) {
 	app.Get("/healthz", func(c fiber.Ctx) error { return c.SendString("ok") })
+
+	// Вход и выход доступны без сессии. Регистрируются до группы /api с проверкой сессии.
+	app.Get("/login", h.login)
+	app.Post("/api/logout", h.logout)
 
 	api := app.Group("/api", h.requireSession)
 	api.Get("/me", h.me)
@@ -65,16 +79,38 @@ func (h *HTTP) requireSession(c fiber.Ctx) error {
 		if errors.Is(err, twitch.ErrNoSession) {
 			// Навигация браузера (подключение MemeAlerts): ведём на вход, а не показываем JSON.
 			if strings.Contains(c.Get("Accept"), "text/html") {
-				c.Set("Location", "/auth/twitch/login?return_to=/")
+				c.Set("Location", h.loginURL())
 				return c.SendStatus(fiber.StatusFound)
 			}
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized", "loginUrl": "/auth/twitch/login"})
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized", "loginUrl": "/login"})
 		}
 		h.log.Error("validate session", "err", err)
 		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "сервис авторизации недоступен"})
 	}
 	c.Locals(identityKey, id)
 	return c.Next()
+}
+
+// loginURL: вход идёт через сервис twitch-auth (другой домен), после него пользователь возвращается сюда.
+func (h *HTTP) loginURL() string {
+	return strings.TrimRight(h.cfg.AuthPublicURL, "/") + "/auth/twitch/login?return_to=" +
+		url.QueryEscape(strings.TrimRight(h.cfg.PublicURL, "/")+"/")
+}
+
+func (h *HTTP) login(c fiber.Ctx) error {
+	c.Set("Location", h.loginURL())
+	return c.SendStatus(fiber.StatusFound)
+}
+
+func (h *HTTP) logout(c fiber.Ctx) error {
+	if err := h.sessions.Logout(c.Context(), c.Cookies(h.cfg.CookieName)); err != nil {
+		h.log.Warn("logout", "err", err)
+	}
+	c.Cookie(&fiber.Cookie{
+		Name: h.cfg.CookieName, Value: "", Domain: h.cfg.CookieDomain, Path: "/",
+		MaxAge: -1, HTTPOnly: true, Secure: h.cfg.CookieSecure, SameSite: "Lax",
+	})
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 func identityOf(c fiber.Ctx) twitch.Identity {

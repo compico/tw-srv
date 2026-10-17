@@ -14,8 +14,9 @@ type Account struct {
 	AccessTokenEnc   string
 	RefreshTokenEnc  string
 	ExpiresAt        time.Time
-	Invalid          bool // MemeAlerts отозвал доступ, нужно подключить заново
-	TwitchReauth     bool // Twitch отозвал доступ, стримеру нужно войти заново
+	TokenRefreshedAt time.Time // когда токен MemeAlerts обновлялся в последний раз
+	Invalid          bool      // MemeAlerts отозвал доступ, нужно подключить заново
+	TwitchReauth     bool      // Twitch отозвал доступ, стримеру нужно войти заново
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }

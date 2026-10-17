@@ -59,6 +59,8 @@ frontend                       Vue 3 + Vite; сборка встраиваетс
 4. Один раз локально: `make setup` (генерирует gRPC-код, `go mod tidy`) и закоммитьте `go.sum`.
 5. `docker compose up -d`. Нужна внешняя сеть traefik (`docker network create traefik`, имя в `TRAEFIK_NETWORK`).
 
+Подробная инструкция по развёртыванию без клонирования репозитория: [docs/deploy.md](docs/deploy.md).
+
 Образы собирает GitHub Actions (`.github/workflows/build.yml`) при каждом пуше в `main` и публикует в GHCR:
 `ghcr.io/compico/tw-srv-twitch-auth` и `ghcr.io/compico/tw-srv-memealerts` (теги `latest`, `sha-xxxxxxx`, при теге `vX.Y.Z` ещё версия).
 Для запуска достаточно `docker-compose.yml` и `.env`. Обновление: `docker compose pull && docker compose up -d`.

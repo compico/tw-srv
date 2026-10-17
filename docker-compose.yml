@@ -1,0 +1,56 @@
+services:
+  twitch-auth:
+    build: { context: ., target: twitch-auth }
+    restart: unless-stopped
+    environment:
+      PUBLIC_URL: https://${DOMAIN}
+      TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID}
+      TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET}
+      TOKEN_ENCRYPTION_KEY: ${AUTH_ENCRYPTION_KEY}
+      GRPC_SHARED_SECRET: ${GRPC_SHARED_SECRET}
+      DB_PATH: /data/auth.db
+    volumes:
+      - auth-data:/data
+    networks: [internal, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      traefik.http.routers.oc-auth.rule: Host(`${DOMAIN}`) && PathPrefix(`/auth`)
+      traefik.http.routers.oc-auth.priority: "100"
+      traefik.http.routers.oc-auth.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.oc-auth.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.oc-auth.loadbalancer.server.port: "8081"
+
+  memealerts:
+    build: { context: ., target: memealerts }
+    restart: unless-stopped
+    depends_on: [twitch-auth]
+    environment:
+      PUBLIC_URL: https://${DOMAIN}
+      AUTH_GRPC_ADDR: twitch-auth:9090
+      GRPC_SHARED_SECRET: ${GRPC_SHARED_SECRET}
+      MEMEALERTS_CLIENT_ID: ${MEMEALERTS_CLIENT_ID}
+      MEMEALERTS_CLIENT_SECRET: ${MEMEALERTS_CLIENT_SECRET}
+      TOKEN_ENCRYPTION_KEY: ${MEMEALERTS_ENCRYPTION_KEY}
+      DB_PATH: /data/memealerts.db
+    volumes:
+      - memealerts-data:/data
+    networks: [internal, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      traefik.http.routers.oc-app.rule: Host(`${DOMAIN}`)
+      traefik.http.routers.oc-app.priority: "10"
+      traefik.http.routers.oc-app.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.oc-app.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.oc-app.loadbalancer.server.port: "8080"
+
+volumes:
+  auth-data:
+  memealerts-data:
+
+networks:
+  internal:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

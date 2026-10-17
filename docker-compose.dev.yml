@@ -1,0 +1,17 @@
+# Режим разработки фронтенда: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Go отдаёт HTML-оболочку, скрипты и HMR идут с dev-сервера Vite (http://localhost:5173).
+services:
+  memealerts:
+    environment:
+      DEV: "true"
+      VITE_DEV_URL: http://localhost:5173
+
+  vite:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev"
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    networks: [internal]

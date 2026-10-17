@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "github.com/compico/overlaycomposer/internal/authpb;authpb";
+
+// AuthService живёт в сервисе twitch-auth и доступен только внутри docker-сети.
+// Аутентификация вызовов: metadata "authorization: Bearer <GRPC_SHARED_SECRET>".
+service AuthService {
+  // Проверяет cookie-сессию пользователя.
+  // Unauthenticated, если сессии нет или она истекла.
+  rpc ValidateSession(ValidateSessionRequest) returns (ValidateSessionResponse);
+
+  // Отдаёт свежий пользовательский токен Twitch, при необходимости обновляя его.
+  // FailedPrecondition, если пользователь отозвал доступ и должен войти заново.
+  rpc GetAccessToken(GetAccessTokenRequest) returns (GetAccessTokenResponse);
+
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+}
+
+message ValidateSessionRequest {
+  string session_id = 1;
+}
+
+message ValidateSessionResponse {
+  string twitch_user_id = 1;
+  string login = 2;
+  string display_name = 3;
+  string avatar_url = 4;
+}
+
+message GetAccessTokenRequest {
+  string twitch_user_id = 1;
+}
+
+message GetAccessTokenResponse {
+  string access_token = 1;
+  string client_id = 2;
+  int64 expires_at_unix = 3;
+  repeated string scopes = 4;
+}
+
+message LogoutRequest {
+  string session_id = 1;
+}
+
+message LogoutResponse {}

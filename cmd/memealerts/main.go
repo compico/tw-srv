@@ -45,8 +45,6 @@ func run() error {
 	encKey := env.Require("TOKEN_ENCRYPTION_KEY")
 	cookieName := env.String("SESSION_COOKIE", "oc_session")
 	cookieSecure := env.Bool("COOKIE_SECURE", true)
-	cookieDomain := env.String("COOKIE_DOMAIN", "")
-	authPublicURL := strings.TrimRight(env.Require("AUTH_PUBLIC_URL"), "/")
 	dev := env.Bool("DEV", false)
 	viteURL := env.String("VITE_DEV_URL", "http://localhost:5173")
 	if err := env.Err(); err != nil {
@@ -98,12 +96,9 @@ func run() error {
 		IdleTimeout:  60 * time.Second,
 	})
 	memealert.NewHTTP(svc, authc, memealert.HTTPConfig{
-		CookieName:    cookieName,
-		CookieDomain:  cookieDomain,
-		AuthPublicURL: authPublicURL,
-		PublicURL:     publicURL,
-		CookieSecure:  cookieSecure,
-		View:          page,
+		CookieName:   cookieName,
+		CookieSecure: cookieSecure,
+		View:         page,
 	}, log).Register(app)
 
 	go func() {

@@ -6,10 +6,10 @@
 ## Устройство
 
 ```
- браузер ──► traefik ─┬─ AUTH_DOMAIN ──► twitch-auth  (Twitch OAuth, сессии, refresh токенов Twitch) ── auth.db
-                      └─ APP_DOMAIN  ──► memealerts   (панель, награды, EventSub, MemeAlerts API,
-                                              │        refresh токенов MemeAlerts)               ── memealerts.db
-                                              │  gRPC (внутренняя сеть compose)
+ браузер ──► traefik ─┬─ DOMAIN/auth/*  ──► twitch-auth (Twitch OAuth, сессии, refresh токенов Twitch) ── auth.db
+                      └─ DOMAIN (остальное) ► memealerts (панель, награды, EventSub, MemeAlerts API,
+                                              │          refresh токенов MemeAlerts)            ── memealerts.db
+                                              │  gRPC (внутренняя сеть compose, наружу не выходит)
                                               └──────► twitch-auth: ValidateSession, GetAccessToken
 ```
 
@@ -34,8 +34,8 @@ frontend                       Vue 3 + Vite; сборка встраиваетс
 
 ## Как это работает
 
-1. Стример открывает панель на `APP_DOMAIN` и нажимает «Войти через Twitch». Его перенаправляет на `AUTH_DOMAIN`
-   (сервис `twitch-auth`), затем на Twitch, обратно на `AUTH_DOMAIN` и после установки сессии на `APP_DOMAIN`.
+1. Стример открывает панель и нажимает «Войти через Twitch»: `/auth/twitch/login` (сервис `twitch-auth`) → Twitch →
+   `/auth/twitch/callback` → панель.
    Дальше он подключает свой MemeAlerts (OAuth, scope `oauth-user-show oauth-bonus-give`): это нужно один раз,
    потому что список саппортеров и начисление мемкоинов доступны только по токену самого стримера.
 2. В панели настраивает награду; сервис создаёт её на канале через Helix. Лимиты Twitch:
@@ -68,8 +68,8 @@ frontend                       Vue 3 + Vite; сборка встраиваетс
 
 ## Запуск
 
-1. Приложение Twitch: https://dev.twitch.tv/console/apps, Redirect URL `https://<AUTH_DOMAIN>/auth/twitch/callback`.
-2. Приложение MemeAlerts (по документации регистрируется через поддержку), Redirect URI `https://<APP_DOMAIN>/api/memealerts/callback`.
+1. Приложение Twitch: https://dev.twitch.tv/console/apps, Redirect URL `https://<DOMAIN>/auth/twitch/callback`.
+2. Приложение MemeAlerts (по документации регистрируется через поддержку), Redirect URI `https://<DOMAIN>/api/memealerts/callback`.
 3. `cp .env.example .env`, заполнить; ключи и секрет: `openssl rand -hex 32`.
 4. Один раз локально: `make setup` (генерирует gRPC-код, `go mod tidy`) и закоммитьте `go.sum`.
 5. `docker compose up -d`. Нужна внешняя сеть Traefik (по умолчанию `proxy`, имя в `TRAEFIK_NETWORK`).
@@ -83,8 +83,8 @@ frontend                       Vue 3 + Vite; сборка встраиваетс
 
 Выпуск версии: `git tag v1.0.1 && git push origin v1.0.1`.
 
-Правила Traefik: `Host(AUTH_DOMAIN)` → twitch-auth, `Host(APP_DOMAIN)` → memealerts. HTTP редиректится на HTTPS (`https-redirect@file`), по HTTPS подключаются `default-headers@file` и certresolver `cloudflare`. Все эти имена переопределяются в `.env`, см. `.env.example`.
-Cookie сессии ставит twitch-auth с атрибутом `Domain=COOKIE_DOMAIN` (общий родитель двух доменов), поэтому её видит и memealerts. Учтите, что cookie уходит и на остальные поддомены этого родителя, если на них есть другие сервисы. Возврат после входа разрешён только на `APP_DOMAIN`.
+Правила Traefik: `Host(DOMAIN) && PathPrefix(/auth)` → twitch-auth (приоритет выше), остальное → memealerts. HTTP редиректится на HTTPS (`https-redirect@file`), по HTTPS подключаются `default-headers@file` и certresolver `cloudflare`. Все эти имена переопределяются в `.env`, см. `.env.example`.
+Cookie сессии ставит twitch-auth (HttpOnly, Secure, без атрибута Domain), на том же хосте её читает memealerts и проверяет сессию по gRPC. Токены и секреты браузеру не передаются.
 
 ## Разработка фронтенда
 

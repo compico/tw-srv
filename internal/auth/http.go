@@ -3,18 +3,15 @@ package auth
 import (
 	"errors"
 	"log/slog"
-	"net/url"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 type HTTPConfig struct {
-	CookieName    string
-	CookieDomain  string // например example.com: cookie видна и на соседних поддоменах (memealerts.example.com)
-	CookieSecure  bool
-	SessionTTL    time.Duration
-	DefaultReturn string // куда вернуть при ошибке входа (с завершающим "/")
+	CookieName   string
+	CookieSecure bool
+	SessionTTL   time.Duration
 }
 
 // HTTP: браузерные эндпоинты входа через Twitch (всё под /auth).
@@ -61,7 +58,7 @@ func (h *HTTP) login(c fiber.Ctx) error {
 func (h *HTTP) callback(c fiber.Ctx) error {
 	if e := c.Query("error"); e != "" {
 		// Пользователь отказал в доступе на странице Twitch.
-		c.Set("Location", cmpDefault(h.cfg.DefaultReturn)+"?login_error="+url.QueryEscape(e))
+		c.Set("Location", "/?login_error="+e)
 		return c.SendStatus(fiber.StatusFound)
 	}
 	state, code := c.Query("state"), c.Query("code")
@@ -79,7 +76,15 @@ func (h *HTTP) callback(c fiber.Ctx) error {
 	}
 
 	c.Cookie(&fiber.Cookie{Name: stateCookie, Value: "", Path: "/auth", MaxAge: -1, HTTPOnly: true, Secure: h.cfg.CookieSecure, SameSite: "Lax"})
-	c.Cookie(h.sessionCookie(sessionID, int(h.cfg.SessionTTL.Seconds())))
+	c.Cookie(&fiber.Cookie{
+		Name:     h.cfg.CookieName,
+		Value:    sessionID,
+		Path:     "/",
+		MaxAge:   int(h.cfg.SessionTTL.Seconds()),
+		HTTPOnly: true,
+		Secure:   h.cfg.CookieSecure,
+		SameSite: "Lax",
+	})
 	c.Set("Location", returnTo)
 	return c.SendStatus(fiber.StatusFound)
 }
@@ -88,26 +93,6 @@ func (h *HTTP) logout(c fiber.Ctx) error {
 	if err := h.svc.Logout(c.Context(), c.Cookies(h.cfg.CookieName)); err != nil {
 		h.log.Warn("logout", "err", err)
 	}
-	c.Cookie(h.sessionCookie("", -1))
+	c.Cookie(&fiber.Cookie{Name: h.cfg.CookieName, Value: "", Path: "/", MaxAge: -1, HTTPOnly: true, Secure: h.cfg.CookieSecure, SameSite: "Lax"})
 	return c.SendStatus(fiber.StatusNoContent)
-}
-
-func (h *HTTP) sessionCookie(value string, maxAge int) *fiber.Cookie {
-	return &fiber.Cookie{
-		Name:     h.cfg.CookieName,
-		Value:    value,
-		Domain:   h.cfg.CookieDomain,
-		Path:     "/",
-		MaxAge:   maxAge,
-		HTTPOnly: true,
-		Secure:   h.cfg.CookieSecure,
-		SameSite: "Lax",
-	}
-}
-
-func cmpDefault(s string) string {
-	if s == "" {
-		return "/"
-	}
-	return s
 }

@@ -2,13 +2,13 @@
 
 Пошаговая инструкция для запуска на своём сервере. Репозиторий клонировать не нужно: достаточно `docker-compose.yml` и `.env`, образы скачиваются из GHCR.
 
-Ниже `AUTH_DOMAIN` и `APP_DOMAIN` — два домена сервиса (например, `tw.example.com` и `memealerts.example.com`), `PARENT` — их общий родительский домен (`example.com`).
+Ниже `DOMAIN` — домен сервиса (например, `memealerts.example.com`). Оба сервиса работают на нём: Traefik отправляет `/auth/*` в `twitch-auth`, остальное в `memealerts`.
 
 ## Чек-лист
 
 - [ ] Docker и Docker Compose v2 на сервере
 - [ ] Traefik в Docker: внешняя сеть `proxy`, entrypoints `web` и `websecure`, certresolver `cloudflare`, middleware `https-redirect@file` и `default-headers@file` (другие имена задаются в `.env`)
-- [ ] DNS: A/AAAA-записи `AUTH_DOMAIN` и `APP_DOMAIN` на сервер
+- [ ] DNS: A/AAAA-запись `DOMAIN` на сервер
 - [ ] Приложение Twitch
 - [ ] Приложение MemeAlerts
 - [ ] `.env` заполнен
@@ -18,7 +18,7 @@
 
 <https://dev.twitch.tv/console/apps> → Register Your Application:
 
-- OAuth Redirect URL: `https://AUTH_DOMAIN/auth/twitch/callback`
+- OAuth Redirect URL: `https://DOMAIN/auth/twitch/callback`
 - Category: Application Integration
 - Client Type: Confidential
 
@@ -28,7 +28,7 @@
 
 Регистрируется через поддержку MemeAlerts (или `POST /api/oauth/apps`, если доступно для аккаунта):
 
-- Redirect URI: `https://APP_DOMAIN/api/memealerts/callback`
+- Redirect URI: `https://DOMAIN/api/memealerts/callback`
 - Scopes: `oauth-user-show oauth-bonus-give`
 
 Сохраните `clientId` и `clientSecret` (секрет показывается один раз).
@@ -56,9 +56,7 @@ done
 
 | Переменная | Значение |
 |---|---|
-| `AUTH_DOMAIN` | домен сервиса входа без схемы |
-| `APP_DOMAIN` | домен панели и API без схемы |
-| `COOKIE_DOMAIN` | `PARENT`: общий родитель обоих доменов. Через него сессию видят оба сервиса |
+| `DOMAIN` | домен сервиса без схемы |
 | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | из шага 1 |
 | `MEMEALERTS_CLIENT_ID`, `MEMEALERTS_CLIENT_SECRET` | из шага 2 |
 | `TRAEFIK_*` | необязательные; имена сети, entrypoints, certresolver и middleware, если у вас они другие. Значения по умолчанию: `proxy`, `web`, `websecure`, `cloudflare`, `default-headers@file`, `https-redirect@file` |
@@ -77,8 +75,8 @@ docker compose logs -f
 ## 6. Проверка
 
 - [ ] В логах обоих сервисов есть `http listening`
-- [ ] `https://APP_DOMAIN` открывается, показана кнопка «Войти через Twitch»
-- [ ] Вход проходит: Twitch → возврат на `APP_DOMAIN`, видна панель
+- [ ] `https://DOMAIN` открывается, показана кнопка «Войти через Twitch»
+- [ ] Вход проходит: Twitch → возврат на `DOMAIN`, видна панель
 - [ ] «Подключить MemeAlerts» проходит и возвращает в панель
 - [ ] Награда создаётся и появляется в списке наград канала Twitch (нужен аффилиат или партнёр)
 
@@ -115,10 +113,10 @@ docker compose start
 |---|---|
 | `pull access denied` / `unauthorized` | Образы в GHCR приватные: сделайте пакеты публичными (Packages → пакет → Package settings → Change visibility) или выполните `docker login ghcr.io` |
 | `network proxy declared as external, but could not be found` | `docker network create proxy` или имя сети в `TRAEFIK_NETWORK` |
-| `required variable ... is missing a value` | Не заполнена переменная в `.env` (`AUTH_DOMAIN`, `APP_DOMAIN`, `COOKIE_DOMAIN`) |
-| Twitch: `redirect_mismatch` | Redirect URL в приложении Twitch не совпадает с `https://AUTH_DOMAIN/auth/twitch/callback` |
-| MemeAlerts: ошибка redirect URI | Redirect URI приложения не совпадает с `https://APP_DOMAIN/api/memealerts/callback` |
-| После входа через Twitch снова просит войти | `COOKIE_DOMAIN` не является общим родителем `AUTH_DOMAIN` и `APP_DOMAIN`, либо сайт открыт не по HTTPS |
+| `required variable ... is missing a value` | Не заполнена переменная в `.env` (`DOMAIN`) |
+| Twitch: `redirect_mismatch` | Redirect URL в приложении Twitch не совпадает с `https://DOMAIN/auth/twitch/callback` |
+| MemeAlerts: ошибка redirect URI | Redirect URI приложения не совпадает с `https://DOMAIN/api/memealerts/callback` |
+| После входа через Twitch снова просит войти | Сайт открыт не по HTTPS (cookie сессии помечена Secure) |
 | В панели «сервис авторизации недоступен» | `docker compose logs twitch-auth`; `GRPC_SHARED_SECRET` должен быть общим (он берётся из одного `.env`) |
 | Награду не удаётся создать | Награды за баллы канала доступны только аффилиатам и партнёрам Twitch |
 | Заявка в статусе «Нужна проверка» | Исход начисления неизвестен: проверьте баланс зрителя в MemeAlerts. Заявка осталась в очереди Twitch: закройте или отклоните её там |

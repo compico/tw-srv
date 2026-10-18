@@ -120,18 +120,3 @@ func (c *Client) Credentials(ctx context.Context, userID string) (twitch.Credent
 	}
 	return twitch.Credentials{AccessToken: resp.GetAccessToken(), ClientID: resp.GetClientId()}, nil
 }
-
-// Logout завершает сессию в сервисе авторизации и сбрасывает локальный кэш.
-func (c *Client) Logout(ctx context.Context, sessionID string) error {
-	if sessionID == "" {
-		return nil
-	}
-	c.mu.Lock()
-	delete(c.sessions, sessionID)
-	c.mu.Unlock()
-
-	ctx, cancel := context.WithTimeout(ctx, callTimeout)
-	defer cancel()
-	_, err := c.api.Logout(ctx, &authpb.LogoutRequest{SessionId: sessionID})
-	return err
-}

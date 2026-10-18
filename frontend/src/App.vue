@@ -162,7 +162,7 @@ onUnmounted(() => window.clearInterval(timer))
 
     <section v-else-if="phase === 'anon'" class="card center">
       <p>Зрители обменивают баллы канала на мемкоины прямо на вашем стриме. Войдите через Twitch, чтобы настроить награду.</p>
-      <a class="btn primary" href="/login">Войти через Twitch</a>
+      <a class="btn primary" href="/auth/twitch/login?return_to=/">Войти через Twitch</a>
     </section>
 
     <section v-else-if="phase === 'error'" class="card center">
@@ -173,7 +173,7 @@ onUnmounted(() => window.clearInterval(timer))
     <template v-else-if="me">
       <section v-if="me.twitchReauth" class="card warn">
         <p>Twitch отозвал доступ к каналу, приём заявок остановлен.</p>
-        <a class="btn primary" href="/login">Войти заново</a>
+        <a class="btn primary" href="/auth/twitch/login?return_to=/">Войти заново</a>
       </section>
 
       <section class="card">

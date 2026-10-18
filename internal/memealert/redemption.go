@@ -144,11 +144,7 @@ func (s *Service) process(ctx context.Context, rw *Reward, rd *Redemption) {
 	}
 
 	// Дальше действие необратимо: фиксируем намерение ДО вызова API.
-	err = s.repo.UpdateRedemption(ctx, rd.ID, map[string]any{
-		"status":             StatusGiving,
-		"matched_nick":       sup.SupporterName,
-		"memealerts_user_id": sup.SupporterID,
-	})
+	err = s.repo.UpdateRedemption(ctx, rd.ID, givingFields(sup))
 	if err != nil {
 		// Без записи в журнал не рискуем выдавать бонус.
 		s.log.Error("persist giving state", "redemption", rd.ID, "err", err)
@@ -171,6 +167,16 @@ func (s *Service) process(ctx context.Context, rw *Reward, rd *Redemption) {
 		// Запрос мог дойти: не повторяем и не возвращаем баллы, чтобы не выдать бонус дважды.
 		s.log.Error("bonus outcome unknown", "redemption", rd.ID, "err", err)
 		s.setStatus(ctx, rd.ID, StatusNeedsReview, "Не удалось подтвердить начисление: проверьте вручную. Заявка осталась в очереди Twitch.")
+	}
+}
+
+// givingFields: поля журнала на момент перехода в giving. Имена колонок GORM строит из имён полей
+// Redemption (MemeAlertsUserID → meme_alerts_user_id); тест проверяет, что они совпадают с моделью.
+func givingFields(sup Supporter) map[string]any {
+	return map[string]any{
+		"status":              StatusGiving,
+		"matched_nick":        sup.SupporterName,
+		"meme_alerts_user_id": sup.SupporterID,
 	}
 }
 

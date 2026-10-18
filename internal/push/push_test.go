@@ -69,6 +69,7 @@ func browserSubscription(t *testing.T, endpoint string) SubscriptionInput {
 func TestSubscribeValidation(t *testing.T) {
 	ctx := context.Background()
 	s := newService(t, true)
+	s.allowHTTP = false // как в проде: только https
 	good := browserSubscription(t, "https://push.example/abc")
 
 	if err := s.Subscribe(ctx, "admin", good, "UA"); err != nil {

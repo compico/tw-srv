@@ -36,6 +36,10 @@ var shell = template.Must(template.New("index").Parse(`<!DOCTYPE html>
 </head>
 <body>
   <div id="app"></div>
+  <footer class="site-footer">
+    Открытый исходный код:
+    <a href="https://github.com/compico/tw-srv" target="_blank" rel="noopener">github.com/compico/tw-srv</a>
+  </footer>
 </body>
 </html>`))
 

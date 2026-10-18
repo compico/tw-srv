@@ -152,3 +152,51 @@ func TestValidation(t *testing.T) {
 		t.Fatalf("open tickets limit: %v", err)
 	}
 }
+
+type fakeNotifier struct{ calls []string }
+
+func (f *fakeNotifier) NotifyStaff(title, body, link string) {
+	f.calls = append(f.calls, title+"|"+body+"|"+link)
+}
+
+func TestStaffNotifications(t *testing.T) {
+	ctx := context.Background()
+	s := newTestService(t, "admin")
+	n := &fakeNotifier{}
+	s.SetNotifier(n)
+	user := Viewer{ID: "u1", Name: "User"}
+	admin := Viewer{ID: "admin", Name: "Admin"}
+
+	tk, err := s.CreateTicket(ctx, user, "Не работает", "текст")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(n.calls) != 1 || !strings.HasPrefix(n.calls[0], "Новая заявка|User: Не работает|/support/") {
+		t.Fatalf("new ticket must notify the admin: %v", n.calls)
+	}
+
+	if _, err := s.Reply(ctx, admin, tk.ID, "Ответ админа"); err != nil {
+		t.Fatal(err)
+	}
+	if len(n.calls) != 1 {
+		t.Fatalf("admin's own reply must not notify: %v", n.calls)
+	}
+
+	if _, err := s.Reply(ctx, user, tk.ID, "Ещё вопрос"); err != nil {
+		t.Fatal(err)
+	}
+	if len(n.calls) != 2 || !strings.HasPrefix(n.calls[1], "Новый ответ|User в «Не работает»|/support/") {
+		t.Fatalf("author reply must notify the admin: %v", n.calls)
+	}
+
+	own, err := s.CreateTicket(ctx, admin, "Моя заявка", "текст")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Reply(ctx, admin, own.ID, "ещё"); err != nil {
+		t.Fatal(err)
+	}
+	if len(n.calls) != 2 {
+		t.Fatalf("admin's own tickets must not notify: %v", n.calls)
+	}
+}

@@ -3,6 +3,7 @@ package support
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -36,9 +37,37 @@ type Viewer struct {
 	Name string
 }
 
+// Notifier получает уведомления для администратора (например, браузерные push).
+// Вызывается после успешной записи; реализация не должна блокировать запрос.
+type Notifier interface {
+	NotifyStaff(title, body, link string)
+}
+
 type Service struct {
-	repo    *Repository
-	adminID string
+	repo     *Repository
+	adminID  string
+	notifier Notifier
+}
+
+// SetNotifier подключает уведомления; без него сервис просто ничего не рассылает.
+func (s *Service) SetNotifier(n Notifier) { s.notifier = n }
+
+func (s *Service) notifyStaff(actorID, title, body, link string) {
+	// Свои же действия администратора его не уведомляют.
+	if s.notifier == nil || s.IsAdmin(actorID) {
+		return
+	}
+	s.notifier.NotifyStaff(title, body, link)
+}
+
+func ticketLink(id uint) string { return "/support/" + strconv.FormatUint(uint64(id), 10) }
+
+func shorten(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
 }
 
 // NewService: adminID это Twitch user id администратора. Пустой id означает, что администратора нет
@@ -92,6 +121,7 @@ func (s *Service) CreateTicket(ctx context.Context, v Viewer, subject, body stri
 	if err := s.repo.CreateTicket(ctx, t, m); err != nil {
 		return nil, err
 	}
+	s.notifyStaff(v.ID, "Новая заявка", v.Name+": "+shorten(subject, 100), ticketLink(t.ID))
 	return t, nil
 }
 
@@ -164,6 +194,9 @@ func (s *Service) Reply(ctx context.Context, v Viewer, id uint, body string) (*T
 	m := &Message{AuthorID: v.ID, AuthorName: v.Name, Staff: !isAuthor, Format: FormatMarkdown, Body: body}
 	if err := s.repo.AddMessage(ctx, t.ID, m, next, name); err != nil {
 		return nil, err
+	}
+	if isAuthor {
+		s.notifyStaff(v.ID, "Новый ответ", v.Name+" в «"+shorten(t.Subject, 80)+"»", ticketLink(t.ID))
 	}
 	return s.repo.GetTicket(ctx, t.ID)
 }

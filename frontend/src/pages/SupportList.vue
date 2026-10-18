@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api, type Ticket } from '../api'
+import PushToggle from '../components/PushToggle.vue'
 import StatusPill from '../components/StatusPill.vue'
 import { refreshSupport, session } from '../session'
 
@@ -39,6 +40,7 @@ watch(scope, () => {
 
 <template>
   <div>
+    <PushToggle v-if="isAdmin" />
     <section class="card">
       <div class="head">
         <h2>Поддержка</h2>

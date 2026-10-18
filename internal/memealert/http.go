@@ -15,10 +15,15 @@ import (
 	"github.com/compico/tw-srv/internal/twitch"
 )
 
+// RouteRegistrar добавляет маршруты других доменов (например, поддержки) в группу /api,
+// где уже проверена сессия. identityOf достаёт из запроса вошедшего пользователя.
+type RouteRegistrar func(api fiber.Router, identityOf func(fiber.Ctx) twitch.Identity)
+
 type HTTPConfig struct {
 	CookieName   string // имя cookie сессии (его выставляет сервис twitch-auth)
 	CookieSecure bool
-	View         *view.View // HTML-оболочка и ассеты Vite
+	View         *view.View       // HTML-оболочка и ассеты Vite
+	Extra        []RouteRegistrar // маршруты других доменов под /api
 }
 
 type HTTP struct {
@@ -49,6 +54,9 @@ func (h *HTTP) Register(app *fiber.App) {
 	api.Put("/reward", h.putReward)
 	api.Delete("/reward", h.deleteReward)
 	api.Get("/redemptions", h.redemptions)
+	for _, register := range h.cfg.Extra {
+		register(api, identityOf)
+	}
 	app.All("/api/*", func(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
 	})

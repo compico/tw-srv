@@ -1,3 +1,5 @@
+import { CSRF_HEADER, csrfToken } from './csrf'
+
 export interface RewardForm {
   title: string
   prompt: string
@@ -66,6 +68,16 @@ export interface SupportSummary {
   isAdmin: boolean
 }
 
+export interface UploadedImage {
+  id: string
+  url: string
+  name: string
+  contentType: string
+  size: number
+}
+
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -102,4 +114,22 @@ export const api = {
   reply: (id: number, body: string) => request<TicketDetail>('POST', `/api/support/tickets/${id}/messages`, { body }),
   closeTicket: (id: number) => request<TicketDetail>('POST', `/api/support/tickets/${id}/close`),
   logout: () => request<void>('POST', '/auth/logout'),
+}
+
+// Загрузка картинки для markdown-сообщения: multipart + CSRF-токен. Один повтор, если токен устарел.
+export async function uploadImage(file: File): Promise<UploadedImage> {
+  if (file.size > MAX_IMAGE_BYTES) throw new ApiError('Файл больше 5 МБ', 413, 'too_large')
+  for (let attempt = 0; ; attempt++) {
+    const body = new FormData()
+    body.append('file', file)
+    const res = await fetch('/api/uploads/images', {
+      method: 'POST',
+      headers: { Accept: 'application/json', [CSRF_HEADER]: await csrfToken(attempt > 0) },
+      body,
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) return data as UploadedImage
+    if (res.status === 403 && data.code === 'csrf' && attempt === 0) continue
+    throw new ApiError(data.error ?? `Ошибка ${res.status}`, res.status, data.code)
+  }
 }

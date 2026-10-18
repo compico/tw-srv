@@ -88,7 +88,7 @@ func (s *Service) CreateTicket(ctx context.Context, v Viewer, subject, body stri
 		return nil, &ValidationError{Message: "Слишком много открытых заявок: закройте ненужные"}
 	}
 	t := &Ticket{AuthorID: v.ID, AuthorName: v.Name, Subject: subject, Status: StatusAwaitingStaff}
-	m := &Message{AuthorID: v.ID, AuthorName: v.Name, Format: FormatText, Body: body}
+	m := &Message{AuthorID: v.ID, AuthorName: v.Name, Format: FormatMarkdown, Body: body}
 	if err := s.repo.CreateTicket(ctx, t, m); err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (s *Service) Reply(ctx context.Context, v Viewer, id uint, body string) (*T
 	if isAuthor {
 		next, name = StatusAwaitingStaff, v.Name
 	}
-	m := &Message{AuthorID: v.ID, AuthorName: v.Name, Staff: !isAuthor, Format: FormatText, Body: body}
+	m := &Message{AuthorID: v.ID, AuthorName: v.Name, Staff: !isAuthor, Format: FormatMarkdown, Body: body}
 	if err := s.repo.AddMessage(ctx, t.ID, m, next, name); err != nil {
 		return nil, err
 	}

@@ -9,6 +9,10 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "cropperjs": "^1.6.3",
+    "dompurify": "^3.4.17",
+    "md-editor-v3": "^7.1.0",
+    "screenfull": "^6.0.2",
     "vue": "^3.5.44",
     "vue-router": "^5.4.0"
   },

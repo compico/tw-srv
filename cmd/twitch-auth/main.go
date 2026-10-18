@@ -21,6 +21,7 @@ import (
 	"github.com/compico/tw-srv/internal/authpb"
 	"github.com/compico/tw-srv/internal/platform/config"
 	"github.com/compico/tw-srv/internal/platform/secretbox"
+	"github.com/compico/tw-srv/internal/platform/slowreq"
 	"github.com/compico/tw-srv/internal/platform/sqlitedb"
 	"github.com/compico/tw-srv/internal/twitch"
 )
@@ -94,6 +95,7 @@ func run() error {
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	})
+	app.Use(slowreq.New(log, slowreq.DefaultThreshold))
 	auth.NewHTTP(svc, auth.HTTPConfig{CookieName: cookieName, CookieSecure: cookieSecure, SessionTTL: sessionTTL}, log).Register(app)
 	go func() {
 		log.Info("http listening", "addr", httpAddr)

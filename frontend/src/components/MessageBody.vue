@@ -1,9 +1,14 @@
 <script setup lang="ts">
-// Текст сообщения. Сейчас формат только простой текст (интерполяция Vue экранирует HTML).
-// Когда появится markdown, здесь добавится ветка для format === 'markdown'.
+import { defineAsyncComponent } from 'vue'
+
+// Редактор подгружается отдельным куском: панель стримера его не тянет.
+const MarkdownView = defineAsyncComponent(() => import('./MarkdownView.vue'))
+
+// format: 'markdown' (новые сообщения) или 'text' (ранние: простой текст).
 defineProps<{ body: string; format: string }>()
 </script>
 
 <template>
-  <p class="msg-body">{{ body }}</p>
+  <MarkdownView v-if="format === 'markdown'" :body="body" />
+  <p v-else class="msg-body">{{ body }}</p>
 </template>

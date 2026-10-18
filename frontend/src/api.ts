@@ -34,6 +34,38 @@ export interface Redemption {
   createdAt: string
 }
 
+export type TicketStatus = 'open' | 'waiting' | 'closed'
+
+export interface Ticket {
+  id: number
+  subject: string
+  authorName: string
+  mine: boolean
+  status: TicketStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TicketMessage {
+  id: number
+  authorName: string
+  mine: boolean
+  staff: boolean
+  format: string
+  body: string
+  createdAt: string
+}
+
+export interface TicketDetail {
+  ticket: Ticket
+  messages: TicketMessage[]
+}
+
+export interface SupportSummary {
+  awaiting: number
+  isAdmin: boolean
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -63,5 +95,11 @@ export const api = {
   deleteReward: () => request<void>('DELETE', '/api/reward'),
   disconnectMemeAlerts: () => request<void>('DELETE', '/api/memealerts'),
   redemptions: () => request<Redemption[]>('GET', '/api/redemptions?limit=50'),
+  supportSummary: () => request<SupportSummary>('GET', '/api/support/summary'),
+  tickets: (scope: 'mine' | 'all') => request<Ticket[]>('GET', `/api/support/tickets?scope=${scope}`),
+  createTicket: (subject: string, body: string) => request<Ticket>('POST', '/api/support/tickets', { subject, body }),
+  ticket: (id: number) => request<TicketDetail>('GET', `/api/support/tickets/${id}`),
+  reply: (id: number, body: string) => request<TicketDetail>('POST', `/api/support/tickets/${id}/messages`, { body }),
+  closeTicket: (id: number) => request<TicketDetail>('POST', `/api/support/tickets/${id}/close`),
   logout: () => request<void>('POST', '/auth/logout'),
 }

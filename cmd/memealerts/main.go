@@ -21,6 +21,7 @@ import (
 	"github.com/compico/tw-srv/internal/platform/secretbox"
 	"github.com/compico/tw-srv/internal/platform/sqlitedb"
 	"github.com/compico/tw-srv/internal/platform/view"
+	"github.com/compico/tw-srv/internal/support"
 	"github.com/compico/tw-srv/internal/twitch"
 )
 
@@ -45,6 +46,8 @@ func run() error {
 	encKey := env.Require("TOKEN_ENCRYPTION_KEY")
 	cookieName := env.String("SESSION_COOKIE", "oc_session")
 	cookieSecure := env.Bool("COOKIE_SECURE", true)
+	// Twitch user id администратора поддержки. Пусто: доступа ко всем заявкам нет ни у кого.
+	adminID := env.String("ADMIN_TWITCH_ID", "")
 	dev := env.Bool("DEV", false)
 	viteURL := env.String("VITE_DEV_URL", "http://localhost:5173")
 	if err := env.Err(); err != nil {
@@ -62,6 +65,15 @@ func run() error {
 	repo, err := memealert.NewRepository(db)
 	if err != nil {
 		return err
+	}
+
+	supportRepo, err := support.NewRepository(db)
+	if err != nil {
+		return err
+	}
+	supportHTTP := support.NewHTTP(support.NewService(supportRepo, adminID), log)
+	if adminID == "" {
+		log.Warn("ADMIN_TWITCH_ID не задан: просматривать все заявки поддержки никто не сможет")
 	}
 
 	authc, err := authclient.Dial(authAddr, grpcSecret)
@@ -99,6 +111,7 @@ func run() error {
 		CookieName:   cookieName,
 		CookieSecure: cookieSecure,
 		View:         page,
+		Extra:        []memealert.RouteRegistrar{supportHTTP.Register},
 	}, log).Register(app)
 
 	go func() {

@@ -59,6 +59,7 @@ done
 | `DOMAIN` | домен сервиса без схемы |
 | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | из шага 1 |
 | `MEMEALERTS_CLIENT_ID`, `MEMEALERTS_CLIENT_SECRET` | из шага 2 |
+| `ADMIN_TWITCH_ID` | Twitch user id администратора поддержки. Узнать его можно, войдя в сервис один раз: id пишется в логи `memealerts` (`user=...`). Пусто: всех заявок не увидит никто |
 | `TRAEFIK_*` | необязательные; имена сети, entrypoints, certresolver и middleware, если у вас они другие. Значения по умолчанию: `proxy`, `web`, `websecure`, `cloudflare`, `default-headers@file`, `https-redirect@file` |
 
 > Сохраните `AUTH_ENCRYPTION_KEY` и `MEMEALERTS_ENCRYPTION_KEY`. Без них токены в базах не расшифровать, и стримерам придётся авторизоваться заново.
@@ -78,6 +79,8 @@ docker compose logs -f
 - [ ] `https://DOMAIN` открывается, показана кнопка «Войти через Twitch»
 - [ ] Вход проходит: Twitch → возврат на `DOMAIN`, видна панель
 - [ ] «Подключить MemeAlerts» проходит и возвращает в панель
+- [ ] Кнопка «Поддержка» открывает список заявок; созданная заявка появляется в нём
+- [ ] После заполнения `ADMIN_TWITCH_ID` и `docker compose up -d` на странице «Поддержка» есть вкладка «Все заявки»
 - [ ] Награда создаётся и появляется в списке наград канала Twitch (нужен аффилиат или партнёр)
 
 gRPC-порт `9090` наружу не публикуется, он доступен только внутри сети compose.

@@ -21,6 +21,7 @@
 ```
 cmd/{twitch-auth,memealerts}   точки входа
 internal/auth                  домен: модели, репозиторий, сервис, gRPC-сервер, HTTP
+internal/support               домен: обратная связь (заявки и переписка), хранится в memealerts.db
 internal/authclient            gRPC-клиент к twitch-auth
 internal/memealert             домен: модели, репозиторий, сервис, обработка заявок, слушатели
 internal/twitch                OAuth, Helix, EventSub (общий код)
@@ -89,3 +90,18 @@ Cookie сессии ставит twitch-auth (HttpOnly, Secure, без атри�
 скрипты и HMR идут с Vite (`localhost:5173`). Без Docker: `cd frontend && npm i && npm run dev`
 и `DEV=true` у memealerts. В проде оболочка берёт хэшированные имена из `dist/.vite/manifest.json`.
 Добавлять страницы и API можно в `frontend/src` и `internal/memealert/http.go`.
+
+## Поддержка (обратная связь)
+
+Заявка (`support_tickets`) состоит из сообщений (`support_messages`); первое сообщение это описание заявки.
+Доступ: автор видит свои заявки, администратор (`ADMIN_TWITCH_ID`) видит все; чужая заявка отвечает 404.
+Если переменная пуста, администратора нет.
+
+Статус хранится по сути: `awaiting_staff` (последним написал автор), `awaiting_author` (последним ответил
+администратор), `closed`. Участнику он показывается так: «ждёт ответа» это ожидание ответа именно от него,
+«открыто» это он уже ответил; для автора и администратора эти два статуса всегда противоположны.
+Закрыть заявку может автор или администратор, в закрытую писать нельзя.
+
+У сообщения есть поле `format` (сейчас только `text`, отображается как простой текст). Markdown добавится
+новым значением формата и веткой в `frontend/src/components/MessageBody.vue`, старые сообщения не изменятся.
+Маршруты: `/api/support/*` (регистрируются через `memealert.HTTPConfig.Extra`), страницы `/support`.

@@ -41,6 +41,7 @@ services:
       MEMEALERTS_CLIENT_ID: ${MEMEALERTS_CLIENT_ID}
       MEMEALERTS_CLIENT_SECRET: ${MEMEALERTS_CLIENT_SECRET}
       TOKEN_ENCRYPTION_KEY: ${MEMEALERTS_ENCRYPTION_KEY}
+      ADMIN_TWITCH_ID: ${ADMIN_TWITCH_ID:-}
       DB_PATH: /data/memealerts.db
     volumes:
       - memealerts-data:/data

@@ -1,0 +1,40 @@
+name: ci
+
+# Проверка пулреквестов: сборка фронтенда, генерация gRPC-кода, gofmt, vet, тесты.
+# Образы по-прежнему собираются только по тегу версии (build.yml).
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler
+
+      - name: Frontend
+        run: make frontend
+
+      - name: Generate gRPC code and resolve modules
+        run: make proto tidy
+
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go test ./...

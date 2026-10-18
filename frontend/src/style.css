@@ -86,3 +86,13 @@ th { color: var(--muted); font-weight: 500; }
 .msg.mine { align-self: flex-end; border-color: var(--accent); }
 .msg header { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; margin-bottom: 4px; }
 .msg-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---- markdown ---- */
+.field { margin-bottom: 12px; }
+.field .label { display: block; font-weight: 500; margin-bottom: 4px; }
+.field.bad .md-field { border-color: var(--err); }
+.field small { display: block; margin-top: 4px; }
+.md-field { height: 320px; border-radius: 8px; --md-bk-color: var(--card); }
+.md-view.md-editor-previewOnly, .md-view { background: transparent; }
+.md-view .md-editor-preview-wrapper { padding: 0; }
+.md-view img { max-width: 100%; height: auto; }

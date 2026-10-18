@@ -102,14 +102,14 @@ Cookie сессии ставит twitch-auth (HttpOnly, Secure, без атри�
 «открыто» это он уже ответил; для автора и администратора эти два статуса всегда противоположны.
 Закрыть заявку может автор или администратор, в закрытую писать нельзя.
 
-У сообщения есть поле `format` (сейчас только `text`, отображается как простой текст). Markdown добавится
-новым значением формата и веткой в `frontend/src/components/MessageBody.vue`, старые сообщения не изменятся.
+У сообщения есть поле `format`: новые сообщения пишутся в `markdown`, ранние остались `text` (простой текст).
+Фронтенд отображает каждое по своему формату (`frontend/src/components/MessageBody.vue`).
 Маршруты: `/api/support/*` (регистрируются через `memealert.HTTPConfig.Extra`), страницы `/support`.
 
 ## Загрузка изображений (API)
 
 Для markdown-сообщений: картинка загружается отдельным запросом, в тексте остаётся только ссылка
-(`![name](/api/uploads/<id>)`), содержимое в сообщении не хранится. Фронтенд-редактора пока нет, только API.
+(`![](/api/uploads/<id>)`), содержимое в сообщении не хранится.
 
 | Метод и путь | Назначение |
 |---|---|
@@ -130,18 +130,25 @@ Cookie сессии ставит twitch-auth (HttpOnly, Secure, без атри�
 - Лимит тела запроса в приложении 6 МБ (5 МБ файл и поля multipart). Если перед приложением стоит прокси
   с меньшим лимитом, поднимите его.
 
-Подключение к `md-editor-v3` (когда дойдёт до фронтенда):
+## Редактор markdown
 
-```ts
-const { token } = await (await fetch('/api/csrf')).json()
-const onUploadImg = async (files: File[], callback: (urls: string[]) => void) => {
-  const urls = await Promise.all(files.map(async (f) => {
-    const body = new FormData()
-    body.append('file', f)
-    const res = await fetch('/api/uploads/images', { method: 'POST', headers: { 'X-CSRF-Token': token }, body })
-    if (!res.ok) throw new Error((await res.json()).error)
-    return (await res.json()).url as string
-  }))
-  callback(urls)
-}
-```
+Заявки и ответы пишутся в [md-editor-v3](https://github.com/imzbf/md-editor-v3)
+(`frontend/src/components/MarkdownEditor.vue`, просмотр: `MarkdownView.vue`, общая настройка: `src/markdown/setup.ts`).
+Редактор грузится отдельным куском бандла, только на страницах поддержки.
+
+- Загрузка картинок: обработчик `onUploadImg` отправляет каждый файл на `POST /api/uploads/images` с заголовком
+  `X-CSRF-Token` (токен из `GET /api/csrf`, при устаревшем токене один повтор) и вставляет в текст полученную ссылку.
+  Работают кнопка «Изображение → загрузить файл», вставка из буфера и перетаскивание. Файл больше 5 МБ отклоняется
+  ещё в браузере.
+- Безопасность отображения: сырой HTML в markdown выключен, готовый HTML дополнительно чистится DOMPurify.
+  Разрешены только картинки с наших адресов `/api/uploads/<32 hex>` (внешние картинки раскрыли бы адрес читателя),
+  ссылки открываются с `rel="noopener noreferrer nofollow"`, `javascript:` и подобное вырезается.
+- Без внешних запросов: по умолчанию библиотека тянет скрипты с unpkg.com. Здесь mermaid, katex, echarts,
+  highlight.js и prettier выключены, а cropper (обрезка перед загрузкой) и screenfull подключены из бандла.
+  Интерфейс на русском (`language: 'ru-RU'`).
+
+## Долгие запросы
+
+`internal/platform/slowreq`: middleware в обоих сервисах. Выполняет следующий обработчик, а в `defer` пишет в лог
+`slow request` (метод, путь без query, статус, длительность), если запрос шёл дольше 15 секунд. Порог:
+`slowreq.DefaultThreshold`.

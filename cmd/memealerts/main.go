@@ -19,6 +19,7 @@ import (
 	"github.com/compico/tw-srv/internal/memealert"
 	"github.com/compico/tw-srv/internal/platform/config"
 	"github.com/compico/tw-srv/internal/platform/secretbox"
+	"github.com/compico/tw-srv/internal/platform/slowreq"
 	"github.com/compico/tw-srv/internal/platform/sqlitedb"
 	"github.com/compico/tw-srv/internal/platform/view"
 	"github.com/compico/tw-srv/internal/platform/webguard"
@@ -129,6 +130,7 @@ func run() error {
 		IdleTimeout:  60 * time.Second,
 		BodyLimit:    upload.MaxSize + 1<<20, // файл до 5 МБ плюс служебные поля multipart
 	})
+	app.Use(slowreq.New(log, slowreq.DefaultThreshold))
 	memealert.NewHTTP(svc, authc, memealert.HTTPConfig{
 		CookieName:   cookieName,
 		CookieSecure: cookieSecure,

@@ -82,6 +82,12 @@ func TestConversationFlow(t *testing.T) {
 		t.Fatalf("unexpected messages: %+v", msgs)
 	}
 
+	for _, m := range msgs {
+		if m.Format != FormatMarkdown {
+			t.Fatalf("new messages must be markdown, got %q", m.Format)
+		}
+	}
+
 	// Ответ автора: ждёт администратора.
 	if _, err := s.Reply(ctx, user, tk.ID, "Вот подробности"); err != nil {
 		t.Fatal(err)

@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
 import { api, ApiError, type TicketDetail } from '../api'
 import MessageBody from '../components/MessageBody.vue'
 import StatusPill from '../components/StatusPill.vue'
 import { refreshSupport } from '../session'
+
+const MarkdownEditor = defineAsyncComponent(() => import('../components/MarkdownEditor.vue'))
 
 const props = defineProps<{ id: string }>()
 const ticketId = computed(() => Number(props.id))
@@ -104,9 +106,10 @@ onUnmounted(() => window.clearInterval(timer))
         <p v-if="closed" class="muted">Заявка закрыта. Если вопрос остался, создайте новую.</p>
         <form v-else @submit.prevent="send">
           <fieldset :disabled="sending">
-            <label>Ответ
-              <textarea v-model="reply" rows="4" maxlength="5000" required />
-            </label>
+            <div class="field">
+              <span class="label">Ответ</span>
+              <MarkdownEditor v-model="reply" :max-length="5000" @error="error = $event" />
+            </div>
             <p v-if="error" class="err" role="alert">{{ error }}</p>
             <button class="btn primary" type="submit">{{ sending ? 'Отправляю…' : 'Отправить' }}</button>
           </fieldset>

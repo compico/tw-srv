@@ -13,9 +13,12 @@ const (
 	StatusClosed         Status = "closed"
 )
 
-// Форматы текста сообщения. Сейчас только простой текст; markdown добавится новым значением,
-// старые сообщения останутся как есть.
-const FormatText = "text"
+// Форматы текста сообщения. Новые сообщения пишутся в markdown (редактор на сайте), ранние остались
+// простым текстом: фронтенд отображает каждое по его формату.
+const (
+	FormatText     = "text"
+	FormatMarkdown = "markdown"
+)
 
 type Ticket struct {
 	ID         uint   `gorm:"primaryKey"`

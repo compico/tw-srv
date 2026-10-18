@@ -1,6 +1,6 @@
 # Устройство и разработка
 
-## Устройство
+## Компоненты
 
 ```
  браузер ──► traefik ─┬─ DOMAIN/auth/*  ──► twitch-auth (Twitch OAuth, сессии, refresh токенов Twitch) ── auth.db

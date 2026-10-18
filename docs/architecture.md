@@ -105,3 +105,43 @@ Cookie сессии ставит twitch-auth (HttpOnly, Secure, без атри�
 У сообщения есть поле `format` (сейчас только `text`, отображается как простой текст). Markdown добавится
 новым значением формата и веткой в `frontend/src/components/MessageBody.vue`, старые сообщения не изменятся.
 Маршруты: `/api/support/*` (регистрируются через `memealert.HTTPConfig.Extra`), страницы `/support`.
+
+## Загрузка изображений (API)
+
+Для markdown-сообщений: картинка загружается отдельным запросом, в тексте остаётся только ссылка
+(`![name](/api/uploads/<id>)`), содержимое в сообщении не хранится. Фронтенд-редактора пока нет, только API.
+
+| Метод и путь | Назначение |
+|---|---|
+| `GET /api/csrf` | `{token, header}`: токен для заголовка `X-CSRF-Token` |
+| `POST /api/uploads/images` | `multipart/form-data`, поле `file`; ответ `201 {id, url, name, contentType, size, createdAt}` |
+| `GET /api/uploads` | загрузки текущего пользователя |
+| `GET /api/uploads/:id` | сам файл (только для вошедших; id случайный, 128 бит) |
+| `DELETE /api/uploads/:id` | удалить (владелец или администратор) |
+
+- Размер до 5 МБ (`413` при превышении). Формат определяется по содержимому: PNG, JPEG, GIF, WebP (`415` для остального;
+  SVG не поддерживается из-за скриптов). На пользователя не более 200 файлов и 200 МБ (`422`).
+- Владелец (Twitch id) записан в таблице `uploads` базы `memealerts.db`; файлы лежат в `UPLOADS_DIR` (`/data/uploads`,
+  в томе `memealerts-data`, поэтому попадают в ту же резервную копию).
+- Изменяющие запросы требуют заголовок `X-CSRF-Token`: HMAC от id сессии, ключ выводится из `TOKEN_ENCRYPTION_KEY`
+  (отдельной переменной нет). Заголовок `Origin` проверяется по списку: адрес сайта (`PUBLIC_URL`) плюс
+  `CORS_ALLOWED_ORIGINS`; для разрешённых источников отвечает CORS-preflight (`credentials: true`, заголовки
+  `Content-Type`, `X-CSRF-Token`). Код: `internal/platform/webguard`.
+- Лимит тела запроса в приложении 6 МБ (5 МБ файл и поля multipart). Если перед приложением стоит прокси
+  с меньшим лимитом, поднимите его.
+
+Подключение к `md-editor-v3` (когда дойдёт до фронтенда):
+
+```ts
+const { token } = await (await fetch('/api/csrf')).json()
+const onUploadImg = async (files: File[], callback: (urls: string[]) => void) => {
+  const urls = await Promise.all(files.map(async (f) => {
+    const body = new FormData()
+    body.append('file', f)
+    const res = await fetch('/api/uploads/images', { method: 'POST', headers: { 'X-CSRF-Token': token }, body })
+    if (!res.ok) throw new Error((await res.json()).error)
+    return (await res.json()).url as string
+  }))
+  callback(urls)
+}
+```

@@ -21,8 +21,10 @@ import (
 	"github.com/compico/tw-srv/internal/platform/secretbox"
 	"github.com/compico/tw-srv/internal/platform/sqlitedb"
 	"github.com/compico/tw-srv/internal/platform/view"
+	"github.com/compico/tw-srv/internal/platform/webguard"
 	"github.com/compico/tw-srv/internal/support"
 	"github.com/compico/tw-srv/internal/twitch"
+	"github.com/compico/tw-srv/internal/upload"
 )
 
 func main() {
@@ -48,6 +50,10 @@ func run() error {
 	cookieSecure := env.Bool("COOKIE_SECURE", true)
 	// Twitch user id администратора поддержки. Пусто: доступа ко всем заявкам нет ни у кого.
 	adminID := env.String("ADMIN_TWITCH_ID", "")
+	uploadsDir := env.String("UPLOADS_DIR", "data/uploads")
+	// Источники, которым разрешены запросы к API с cookie (CORS). Адрес сайта (PUBLIC_URL) разрешён всегда;
+	// переменная нужна, например, для локальной разработки (http://localhost:8080).
+	extraOrigins := env.List("CORS_ALLOWED_ORIGINS", nil)
 	dev := env.Bool("DEV", false)
 	viteURL := env.String("VITE_DEV_URL", "http://localhost:5173")
 	if err := env.Err(); err != nil {
@@ -76,6 +82,21 @@ func run() error {
 		log.Warn("ADMIN_TWITCH_ID не задан: просматривать все заявки поддержки никто не сможет")
 	}
 
+	uploadRepo, err := upload.NewRepository(db)
+	if err != nil {
+		return err
+	}
+	uploadStore, err := upload.NewStore(uploadsDir)
+	if err != nil {
+		return err
+	}
+	guard := webguard.New(webguard.Config{
+		Secret:     encKey,
+		CookieName: cookieName,
+		Origins:    append([]string{publicURL}, extraOrigins...),
+	})
+	uploadHTTP := upload.NewHTTP(upload.NewService(uploadRepo, uploadStore, adminID), guard, log)
+
 	authc, err := authclient.Dial(authAddr, grpcSecret)
 	if err != nil {
 		return err
@@ -103,15 +124,16 @@ func run() error {
 	}
 
 	app := fiber.New(fiber.Config{
-		ReadTimeout:  15 * time.Second,
+		ReadTimeout:  60 * time.Second, // с запасом на загрузку файла до 5 МБ
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
+		BodyLimit:    upload.MaxSize + 1<<20, // файл до 5 МБ плюс служебные поля multipart
 	})
 	memealert.NewHTTP(svc, authc, memealert.HTTPConfig{
 		CookieName:   cookieName,
 		CookieSecure: cookieSecure,
 		View:         page,
-		Extra:        []memealert.RouteRegistrar{supportHTTP.Register},
+		Extra:        []memealert.RouteRegistrar{supportHTTP.Register, uploadHTTP.Register},
 	}, log).Register(app)
 
 	go func() {

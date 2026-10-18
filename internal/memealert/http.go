@@ -68,6 +68,10 @@ func (h *HTTP) Register(app *fiber.App) {
 // ---------------------------------------------------------------- middleware
 
 func (h *HTTP) requireSession(c fiber.Ctx) error {
+	// CORS-preflight приходит без cookie; его обрабатывают сами маршруты (webguard.Preflight).
+	if c.Method() == fiber.MethodOptions {
+		return c.Next()
+	}
 	id, err := h.sessions.ValidateSession(c.Context(), c.Cookies(h.cfg.CookieName))
 	if err != nil {
 		if errors.Is(err, twitch.ErrNoSession) {

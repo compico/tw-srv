@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import Landing from './components/Landing.vue'
 import { loadSession, logout, session } from './session'
 
 onMounted(loadSession)
@@ -24,10 +25,7 @@ const loginUrl = () => `/auth/twitch/login?return_to=${encodeURIComponent(locati
 
     <section v-if="session.phase === 'loading'" class="card muted">Загрузка…</section>
 
-    <section v-else-if="session.phase === 'anon'" class="card center">
-      <p>Зрители обменивают баллы канала на мемкоины прямо на вашем стриме. Войдите через Twitch, чтобы настроить награду.</p>
-      <a class="btn primary" :href="loginUrl()">Войти через Twitch</a>
-    </section>
+    <Landing v-else-if="session.phase === 'anon'" :login-url="loginUrl()" />
 
     <section v-else-if="session.phase === 'error'" class="card center">
       <p>Не удалось загрузить данные.</p>

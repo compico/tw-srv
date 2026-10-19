@@ -78,6 +78,12 @@ export interface UploadedImage {
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
+export interface PushStatus {
+  enabled: boolean
+  publicKey: string
+  devices: number
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -132,4 +138,27 @@ export async function uploadImage(file: File): Promise<UploadedImage> {
     if (res.status === 403 && data.code === 'csrf' && attempt === 0) continue
     throw new ApiError(data.error ?? `Ошибка ${res.status}`, res.status, data.code)
   }
+}
+
+// POST с CSRF-токеном и одним повтором, если токен устарел.
+async function postCsrf<T>(url: string, body?: unknown): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', [CSRF_HEADER]: await csrfToken(attempt > 0) },
+      body: JSON.stringify(body ?? {}),
+    })
+    if (res.status === 204) return undefined as T
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) return data as T
+    if (res.status === 403 && data.code === 'csrf' && attempt === 0) continue
+    throw new ApiError(data.error ?? `Ошибка ${res.status}`, res.status, data.code)
+  }
+}
+
+export const pushApi = {
+  status: () => request<PushStatus>('GET', '/api/push/status'),
+  subscribe: (sub: PushSubscriptionJSON) => postCsrf<void>('/api/push/subscribe', sub),
+  unsubscribe: (endpoint: string) => postCsrf<void>('/api/push/unsubscribe', { endpoint }),
+  test: () => postCsrf<{ sent: number }>('/api/push/test'),
 }

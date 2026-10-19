@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	webpush "github.com/SherClockHolmes/webpush-go"
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/compico/tw-srv/internal/authclient"
@@ -23,12 +25,23 @@ import (
 	"github.com/compico/tw-srv/internal/platform/sqlitedb"
 	"github.com/compico/tw-srv/internal/platform/view"
 	"github.com/compico/tw-srv/internal/platform/webguard"
+	"github.com/compico/tw-srv/internal/push"
 	"github.com/compico/tw-srv/internal/support"
 	"github.com/compico/tw-srv/internal/twitch"
 	"github.com/compico/tw-srv/internal/upload"
 )
 
 func main() {
+	// `app vapid-keys` печатает новую пару VAPID-ключей для push-уведомлений и выходит.
+	if len(os.Args) > 1 && os.Args[1] == "vapid-keys" {
+		priv, pub, err := webpush.GenerateVAPIDKeys()
+		if err != nil {
+			slog.Error("generate vapid keys", "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("VAPID_PUBLIC_KEY=%s\nVAPID_PRIVATE_KEY=%s\n", pub, priv)
+		return
+	}
 	if err := run(); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
@@ -52,6 +65,10 @@ func run() error {
 	// Twitch user id администратора поддержки. Пусто: доступа ко всем заявкам нет ни у кого.
 	adminID := env.String("ADMIN_TWITCH_ID", "")
 	uploadsDir := env.String("UPLOADS_DIR", "data/uploads")
+	// Push-уведомления администратору (необязательно): ключи создаёт `app vapid-keys`.
+	vapidPublic := env.String("VAPID_PUBLIC_KEY", "")
+	vapidPrivate := env.String("VAPID_PRIVATE_KEY", "")
+	vapidSubject := env.String("VAPID_SUBJECT", "") // mailto:... или https://...; по умолчанию адрес сайта
 	// Источники, которым разрешены запросы к API с cookie (CORS). Адрес сайта (PUBLIC_URL) разрешён всегда;
 	// переменная нужна, например, для локальной разработки (http://localhost:8080).
 	extraOrigins := env.List("CORS_ALLOWED_ORIGINS", nil)
@@ -78,7 +95,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	supportHTTP := support.NewHTTP(support.NewService(supportRepo, adminID), log)
+	supportSvc := support.NewService(supportRepo, adminID)
+	supportHTTP := support.NewHTTP(supportSvc, log)
 	if adminID == "" {
 		log.Warn("ADMIN_TWITCH_ID не задан: просматривать все заявки поддержки никто не сможет")
 	}
@@ -97,6 +115,22 @@ func run() error {
 		Origins:    append([]string{publicURL}, extraOrigins...),
 	})
 	uploadHTTP := upload.NewHTTP(upload.NewService(uploadRepo, uploadStore, adminID), guard, log)
+
+	pushRepo, err := push.NewRepository(db)
+	if err != nil {
+		return err
+	}
+	if vapidSubject == "" {
+		vapidSubject = publicURL
+	}
+	pushSvc := push.NewService(pushRepo, push.Config{
+		PublicKey: vapidPublic, PrivateKey: vapidPrivate, Subject: vapidSubject, AdminID: adminID,
+	}, log)
+	supportSvc.SetNotifier(pushSvc)
+	pushHTTP := push.NewHTTP(pushSvc, guard, log)
+	if !pushSvc.Enabled() {
+		log.Info("push-уведомления выключены: задайте VAPID_PUBLIC_KEY и VAPID_PRIVATE_KEY (app vapid-keys)")
+	}
 
 	authc, err := authclient.Dial(authAddr, grpcSecret)
 	if err != nil {
@@ -135,7 +169,7 @@ func run() error {
 		CookieName:   cookieName,
 		CookieSecure: cookieSecure,
 		View:         page,
-		Extra:        []memealert.RouteRegistrar{supportHTTP.Register, uploadHTTP.Register},
+		Extra:        []memealert.RouteRegistrar{supportHTTP.Register, uploadHTTP.Register, pushHTTP.Register},
 	}, log).Register(app)
 
 	go func() {

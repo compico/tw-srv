@@ -61,6 +61,7 @@ func (h *HTTP) Register(app *fiber.App) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
 	})
 
+	app.Get("/sw.js", h.cfg.View.ServiceWorkerHandler)
 	app.Get("/assets/*", h.cfg.View.AssetsHandler)
 	app.Get("/*", h.cfg.View.IndexHandler)
 }

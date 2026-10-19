@@ -32,6 +32,7 @@ var shell = template.Must(template.New("index").Parse(`<!DOCTYPE html>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{.Title}}</title>
+  <meta name="description" content="Награда «Получить мемкоины» на Twitch: зрители меняют баллы канала на мемкоины MemeAlerts. Открытый исходный код." />
   {{.ViteTags}}
 </head>
 <body>
@@ -83,6 +84,18 @@ func (v *View) IndexHandler(c fiber.Ctx) error {
 	c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)
 	c.Set(fiber.HeaderCacheControl, "no-cache")
 	return c.Send(v.page)
+}
+
+// ServiceWorkerHandler отдаёт /sw.js (frontend/public/sw.js) из корня сайта: область действия service worker
+// определяется его путём, поэтому из /assets/ он не подошёл бы. Файл не кэшируется, чтобы обновления доходили сразу.
+func (v *View) ServiceWorkerHandler(c fiber.Ctx) error {
+	data, err := fs.ReadFile(v.assets, "sw.js")
+	if err != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	c.Set(fiber.HeaderContentType, "text/javascript; charset=utf-8")
+	c.Set(fiber.HeaderCacheControl, "no-cache")
+	return c.Send(data)
 }
 
 // AssetsHandler отдаёт файлы бандла из embed.FS (/assets/*). В dev их раздаёт сам Vite.

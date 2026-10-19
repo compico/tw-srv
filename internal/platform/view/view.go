@@ -32,6 +32,7 @@ var shell = template.Must(template.New("index").Parse(`<!DOCTYPE html>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{.Title}}</title>
+  <meta name="description" content="Награда «Получить мемкоины» на Twitch: зрители меняют баллы канала на мемкоины MemeAlerts. Открытый исходный код." />
   {{.ViteTags}}
 </head>
 <body>

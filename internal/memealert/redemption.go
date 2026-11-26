@@ -144,8 +144,8 @@ func (s *Service) process(ctx context.Context, rw *Reward, rd *Redemption) {
 		s.refundPublic(ctx, rw, rd, msg, fmt.Sprintf("ник «%s» не найден среди саппортеров", nick))
 		return
 	case matchAmbiguous:
-		s.refundPublic(ctx, rw, rd, ambiguousReason(nick, dupes, rw.UseUserInput),
-			fmt.Sprintf("ник «%s» принадлежит нескольким пользователям: укажите ссылку memealerts.com/... или ID вместо ника", nick))
+		s.refundKind(ctx, rw, rd, ambiguousReason(nick, dupes, rw.UseUserInput),
+			fmt.Sprintf("ник «%s» принадлежит нескольким пользователям: укажите ссылку memealerts.com/... или ID вместо ника", nick), true)
 		return
 	case matchMuted:
 		s.refundPublic(ctx, rw, rd, "Стример заблокировал этого пользователя в MemeAlerts", "начисление для этого пользователя недоступно")
@@ -169,7 +169,7 @@ func (s *Service) process(ctx context.Context, rw *Reward, rd *Redemption) {
 		s.setStatus(ctx, rd.ID, StatusFulfilled, "")
 		s.log.Info("bonus given", "redemption", rd.ID, "supporter", sup.SupporterID, "amount", rw.BonusAmount)
 		s.finalizeTwitch(ctx, rw, rd.ID, twitch.StatusFulfilled)
-		s.notifyChat(rw, rd, sup.SupporterName, true, "")
+		s.notifyChat(rw, rd, sup.SupporterName, true, "", false)
 	case definitelyNotApplied(err):
 		s.log.Warn("bonus rejected", "redemption", rd.ID, "err", err)
 		s.refundPublic(ctx, rw, rd, "MemeAlerts отклонил начисление: "+apiMessage(err), "MemeAlerts отклонил начисление")
@@ -197,9 +197,14 @@ func (s *Service) refund(ctx context.Context, rw *Reward, rd *Redemption, reason
 
 // refundPublic: reason видит только стример (журнал в dashboard), public можно писать в чат.
 func (s *Service) refundPublic(ctx context.Context, rw *Reward, rd *Redemption, reason, public string) {
+	s.refundKind(ctx, rw, rd, reason, public, false)
+}
+
+// refundKind: duplicate=true для отказа из-за дубликатов ника (в чат уходит отдельное сообщение).
+func (s *Service) refundKind(ctx context.Context, rw *Reward, rd *Redemption, reason, public string, duplicate bool) {
 	s.setStatus(ctx, rd.ID, StatusRefunded, reason)
 	s.finalizeTwitch(ctx, rw, rd.ID, twitch.StatusCanceled)
-	s.notifyChat(rw, rd, "", false, public)
+	s.notifyChat(rw, rd, "", false, public, duplicate)
 }
 
 func (s *Service) setStatus(ctx context.Context, id string, st RedemptionStatus, reason string) {

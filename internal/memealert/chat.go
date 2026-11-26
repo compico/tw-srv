@@ -9,6 +9,8 @@ type ChatEvent struct {
 	Nick        string // ник, который ввёл зритель, или найденный ник саппортера
 	Amount      int
 	Reason      string // для неудачи: причина, безопасная для публикации в чате
+	Duplicate   bool   // неудача из-за того, что ник есть у нескольких саппортеров
+	GuideURL    string // заполняет получатель: ссылка на гайд «как найти свой ID»
 }
 
 // ChatNotifier отправляет сообщения в чат. Реализация не должна блокировать и не должна влиять на выдачу.
@@ -21,7 +23,7 @@ func (s *Service) SetChat(n ChatNotifier) { s.chat = n }
 
 // notifyChat вызывается только после окончательного исхода (выдано или возвращено).
 // Любая ошибка или паника уведомителя не должна ломать обработку заявки.
-func (s *Service) notifyChat(rw *Reward, rd *Redemption, matchedNick string, success bool, publicReason string) {
+func (s *Service) notifyChat(rw *Reward, rd *Redemption, matchedNick string, success bool, publicReason string, duplicate bool) {
 	if s.chat == nil {
 		return
 	}
@@ -37,6 +39,7 @@ func (s *Service) notifyChat(rw *Reward, rd *Redemption, matchedNick string, suc
 		Nick:        nick,
 		Amount:      rw.BonusAmount,
 		Reason:      publicReason,
+		Duplicate:   duplicate,
 	}
 	defer func() {
 		if r := recover(); r != nil {

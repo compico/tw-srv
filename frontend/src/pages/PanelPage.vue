@@ -46,7 +46,13 @@ const chat = ref<ChatState | null>(null)
 const chatForm = reactive<ChatState['templates']>({
   success: { enabled: false, text: '' },
   fail: { enabled: false, text: '' },
+  duplicate: { enabled: false, text: '' },
 })
+const chatKinds = [
+  { key: 'success', title: 'Когда мемкоины начислены' },
+  { key: 'duplicate', title: 'Когда ник есть у нескольких саппортеров (в тексте ссылка на гайд про ID)' },
+  { key: 'fail', title: 'Когда начислить не получилось (баллы возвращены)' },
+] as const
 const chatSaving = ref(false)
 const chatField = ref('')
 
@@ -56,6 +62,7 @@ async function loadChat() {
     chat.value = st
     Object.assign(chatForm.success, st.templates.success)
     Object.assign(chatForm.fail, st.templates.fail)
+    Object.assign(chatForm.duplicate, st.templates.duplicate)
   } catch {
     chat.value = null
   }
@@ -65,7 +72,7 @@ async function saveChat() {
   chatField.value = ''
   chatSaving.value = true
   try {
-    await chatApi.saveTemplates({ success: { ...chatForm.success }, fail: { ...chatForm.fail } })
+    await chatApi.saveTemplates({ success: { ...chatForm.success }, fail: { ...chatForm.fail }, duplicate: { ...chatForm.duplicate } })
     say('ok', 'Сообщения для чата сохранены')
   } catch (e) {
     if (e instanceof ApiError) {
@@ -84,6 +91,28 @@ async function disconnectBot() {
     await loadChat()
   } catch (e) {
     say('err', e instanceof Error ? e.message : 'Не удалось отключить')
+  }
+}
+
+// Ссылка подключения для другого браузера (приватное окно с аккаунтом бота).
+const botLink = ref('')
+const botLinkBusy = ref(false)
+
+async function copyBotLink() {
+  botLinkBusy.value = true
+  try {
+    const { url } = await chatApi.botLink()
+    botLink.value = url
+    try {
+      await navigator.clipboard.writeText(url)
+      say('ok', 'Ссылка скопирована. Откройте её в приватном окне браузера; она действует 10 минут и работает один раз.')
+    } catch {
+      say('ok', 'Скопируйте ссылку из поля ниже и откройте её в приватном окне; она действует 10 минут.')
+    }
+  } catch (e) {
+    say('err', e instanceof Error ? e.message : 'Не удалось создать ссылку')
+  } finally {
+    botLinkBusy.value = false
   }
 }
 
@@ -166,14 +195,12 @@ const fmt = (iso: string) =>
   new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 let timer: number | undefined
+let botTimer: number | undefined
 onMounted(() => {
   // Сообщения после возврата с MemeAlerts: /?memealerts=connected | /?memealerts_error=...
   const q = new URLSearchParams(location.search)
   if (q.get('memealerts') === 'connected') say('ok', 'MemeAlerts подключён')
   else if (q.get('memealerts_error')) say('err', 'Не удалось подключить MemeAlerts, попробуйте ещё раз')
-  else if (q.get('bot') === 'connected') say('ok', 'Бот подключён')
-  else if (q.get('bot') === 'bad_scope') say('err', 'Не выданы нужные права: бот должен писать в чат')
-  else if (q.get('bot')) say('err', 'Не удалось подключить бота, попробуйте ещё раз')
   else if (q.get('login_error')) say('err', 'Вход через Twitch отменён')
   if (q.toString()) history.replaceState(null, '', '/')
 
@@ -181,8 +208,15 @@ onMounted(() => {
   loadHistory()
   loadChat()
   timer = window.setInterval(loadHistory, 15000)
+  // Бот мог подключиться в другом браузере: пока не подключён, проверяем состояние.
+  botTimer = window.setInterval(() => {
+    if (chat.value?.available && !botReady.value) loadChat()
+  }, 5000)
 })
-onUnmounted(() => window.clearInterval(timer))
+onUnmounted(() => {
+  window.clearInterval(timer)
+  window.clearInterval(botTimer)
+})
 </script>
 
 <template>
@@ -293,36 +327,34 @@ onUnmounted(() => window.clearInterval(timer))
             Бот отвечает зрителю в чате о результате обмена. Лучше подключить отдельный аккаунт бота;
             Twitch спросит, под каким аккаунтом войти. Просить права на управление наградами не нужно: только писать в чат.
           </p>
-          <a class="btn primary" href="/api/bot/connect">Подключить бота</a>
+          <div class="actions">
+            <a class="btn primary" href="/api/bot/connect">Подключить бота</a>
+            <button class="btn" type="button" :disabled="botLinkBusy" @click="copyBotLink">Скопировать ссылку для другого браузера</button>
+          </div>
+          <input v-if="botLink" class="linkbox" type="text" readonly :value="botLink" aria-label="Ссылка авторизации бота" @focus="($event.target as HTMLInputElement).select()" />
+          <p v-if="botLink" class="note">
+            Откройте ссылку в приватном окне и войдите под аккаунтом бота. После подтверждения эта страница сама покажет бота.
+            Ссылка одноразовая и действует 10 минут: не показывайте её другим.
+          </p>
         </template>
 
         <form @submit.prevent="saveChat">
           <fieldset :disabled="chatSaving">
-            <div class="msg" :class="{ off: !chatForm.success.enabled }">
+            <div v-for="k in chatKinds" :key="k.key" class="msg" :class="{ off: !chatForm[k.key].enabled }">
               <div class="msg-head">
-                <span>Когда мемкоины начислены</span>
+                <span>{{ k.title }}</span>
                 <label class="switch">
-                  <input v-model="chatForm.success.enabled" type="checkbox" role="switch" aria-label="Сообщение об успехе" />
-                  <span>{{ chatForm.success.enabled ? 'Включено' : 'Выключено' }}</span>
+                  <input v-model="chatForm[k.key].enabled" type="checkbox" role="switch" :aria-label="k.title" />
+                  <span>{{ chatForm[k.key].enabled ? 'Включено' : 'Выключено' }}</span>
                 </label>
               </div>
-              <textarea v-model="chatForm.success.text" rows="2" maxlength="400" :disabled="!chatForm.success.enabled" :class="{ bad: chatField === 'success' }" />
-            </div>
-
-            <div class="msg" :class="{ off: !chatForm.fail.enabled }">
-              <div class="msg-head">
-                <span>Когда начислить не получилось (баллы возвращены)</span>
-                <label class="switch">
-                  <input v-model="chatForm.fail.enabled" type="checkbox" role="switch" aria-label="Сообщение о неудаче" />
-                  <span>{{ chatForm.fail.enabled ? 'Включено' : 'Выключено' }}</span>
-                </label>
-              </div>
-              <textarea v-model="chatForm.fail.text" rows="2" maxlength="400" :disabled="!chatForm.fail.enabled" :class="{ bad: chatField === 'fail' }" />
+              <textarea v-model="chatForm[k.key].text" rows="2" maxlength="400" :disabled="!chatForm[k.key].enabled" :class="{ bad: chatField === k.key }" />
             </div>
 
             <p class="note">
               Подстановки: <code>{user}</code> имя зрителя, <code>{nick}</code> ник MemeAlerts,
-              <code>{amount}</code> число мемкоинов, <code>{reason}</code> причина (для неудачи).
+              <code>{amount}</code> число мемкоинов, <code>{reason}</code> причина (для неудачи),
+              <code>{guide}</code> ссылка на гайд «как найти свой ID». Если сообщение про дубликаты выключено, в этом случае уходит сообщение о неудаче.
               {{ botReady ? '' : 'Сообщения будут отправляться после подключения бота.' }}
             </p>
             <div class="actions">

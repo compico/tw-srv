@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import PanelPage from './pages/PanelPage.vue'
+import BotResult from './pages/BotResult.vue'
 import GuideId from './pages/GuideId.vue'
 import SupportList from './pages/SupportList.vue'
 import SupportNew from './pages/SupportNew.vue'
@@ -10,6 +11,8 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: PanelPage },
+    // bare: пустая страница без шапки и ссылок на панель (открывается в другом браузере)
+    { path: '/bot/result', component: BotResult, meta: { public: true, bare: true } },
     // Публичные страницы доступны без входа (meta.public).
     { path: '/guide/id', component: GuideId, meta: { public: true } },
     { path: '/support', component: SupportList },

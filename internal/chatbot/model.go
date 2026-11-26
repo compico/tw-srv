@@ -23,19 +23,32 @@ type Bot struct {
 	UpdatedAt       time.Time
 }
 
+// ConnectState: одноразовая ссылка подключения бота. Хранится на сервере, а не в cookie браузера:
+// так подключить бота можно из другого браузера (например, приватного окна с другим аккаунтом).
+type ConnectState struct {
+	State        string    `gorm:"primaryKey;size:64"`
+	TwitchUserID string    `gorm:"size:32"`
+	ExpiresAt    time.Time `gorm:"index"`
+}
+
 // Settings: шаблоны сообщений. По умолчанию всё выключено.
 type Settings struct {
-	TwitchUserID   string `gorm:"primaryKey;size:32"`
-	SuccessEnabled bool
-	SuccessText    string
-	FailEnabled    bool
-	FailText       string
-	UpdatedAt      time.Time
+	TwitchUserID     string `gorm:"primaryKey;size:32"`
+	SuccessEnabled   bool
+	SuccessText      string
+	FailEnabled      bool
+	FailText         string
+	DuplicateEnabled bool // отдельное сообщение, если ник есть у нескольких саппортеров
+	DuplicateText    string
+	UpdatedAt        time.Time
 }
 
 const (
 	DefaultSuccessText = "@{user}, мемкоины ({amount}) начислены на твой аккаунт MemeAlerts!"
 	DefaultFailText    = "@{user}, мемкоины не начислены: {reason}. Баллы возвращены."
+
+	// {guide} подставляется адресом страницы-гайда «как найти свой ID».
+	DefaultDuplicateText = "@{user}, ник «{nick}» есть у нескольких саппортеров, баллы возвращены. Укажи вместо ника свой ID: {guide}"
 
 	MaxTemplateRunes = 400
 	MaxMessageRunes  = 500 // лимит Twitch

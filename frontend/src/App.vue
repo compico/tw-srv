@@ -13,7 +13,7 @@ const loginUrl = () => `/auth/twitch/login?return_to=${encodeURIComponent(locati
 
 <template>
   <main class="wrap">
-    <header class="top">
+    <header v-if="!route.meta.bare" class="top">
       <h1><RouterLink to="/" class="home">Мемкоины за баллы канала</RouterLink></h1>
       <div v-if="session.me" class="who">
         <RouterLink class="btn" to="/support">

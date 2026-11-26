@@ -12,7 +12,7 @@ type Repository struct{ db *gorm.DB }
 
 // NewRepository только добавляет новые таблицы: существующие данные не затрагиваются.
 func NewRepository(db *gorm.DB) (*Repository, error) {
-	if err := db.AutoMigrate(&Bot{}, &Settings{}); err != nil {
+	if err := db.AutoMigrate(&Bot{}, &Settings{}, &ConnectState{}); err != nil {
 		return nil, err
 	}
 	return &Repository{db: db}, nil
@@ -52,4 +52,24 @@ func (r *Repository) GetSettings(ctx context.Context, streamerID string) (*Setti
 
 func (r *Repository) SaveSettings(ctx context.Context, s *Settings) error {
 	return r.db.WithContext(ctx).Save(s).Error
+}
+
+func (r *Repository) SaveState(ctx context.Context, st *ConnectState) error {
+	_ = r.db.WithContext(ctx).Delete(&ConnectState{}, "expires_at < ?", time.Now()).Error
+	return r.db.WithContext(ctx).Create(st).Error
+}
+
+// TakeState достаёт и удаляет состояние: каждая ссылка работает один раз.
+func (r *Repository) TakeState(ctx context.Context, state string) (*ConnectState, error) {
+	var st ConnectState
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.First(&st, "state = ?", state).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&ConnectState{}, "state = ?", state).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &st, nil
 }

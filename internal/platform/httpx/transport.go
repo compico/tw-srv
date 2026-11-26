@@ -22,5 +22,7 @@ func NewTransport() *http.Transport {
 	t.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{} // пустая карта: ALPN h2 не предлагается
 	t.IdleConnTimeout = 30 * time.Second
 	t.TLSHandshakeTimeout = 10 * time.Second
+	t.DisableKeepAlives = true
+
 	return t
 }

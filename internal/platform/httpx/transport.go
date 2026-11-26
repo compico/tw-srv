@@ -19,7 +19,9 @@ func NewTransport() *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.DialContext = (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 15 * time.Second}).DialContext
 	t.ForceAttemptHTTP2 = false
-	t.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{} // пустая карта: ALPN h2 не предлагается
+	t.TLSClientConfig = &tls.Config{
+		NextProtos: []string{"http/1.1"},
+	}
 	t.IdleConnTimeout = 30 * time.Second
 	t.TLSHandshakeTimeout = 10 * time.Second
 	t.DisableKeepAlives = true

@@ -298,17 +298,27 @@ onUnmounted(() => window.clearInterval(timer))
 
         <form @submit.prevent="saveChat">
           <fieldset :disabled="chatSaving">
-            <label class="check">
-              <input v-model="chatForm.success.enabled" type="checkbox" />
-              Писать в чат, когда мемкоины начислены
-            </label>
-            <textarea v-model="chatForm.success.text" rows="2" maxlength="400" :class="{ bad: chatField === 'success' }" />
+            <div class="msg" :class="{ off: !chatForm.success.enabled }">
+              <div class="msg-head">
+                <span>Когда мемкоины начислены</span>
+                <label class="switch">
+                  <input v-model="chatForm.success.enabled" type="checkbox" role="switch" aria-label="Сообщение об успехе" />
+                  <span>{{ chatForm.success.enabled ? 'Включено' : 'Выключено' }}</span>
+                </label>
+              </div>
+              <textarea v-model="chatForm.success.text" rows="2" maxlength="400" :disabled="!chatForm.success.enabled" :class="{ bad: chatField === 'success' }" />
+            </div>
 
-            <label class="check">
-              <input v-model="chatForm.fail.enabled" type="checkbox" />
-              Писать в чат, когда начислить не получилось (баллы возвращены)
-            </label>
-            <textarea v-model="chatForm.fail.text" rows="2" maxlength="400" :class="{ bad: chatField === 'fail' }" />
+            <div class="msg" :class="{ off: !chatForm.fail.enabled }">
+              <div class="msg-head">
+                <span>Когда начислить не получилось (баллы возвращены)</span>
+                <label class="switch">
+                  <input v-model="chatForm.fail.enabled" type="checkbox" role="switch" aria-label="Сообщение о неудаче" />
+                  <span>{{ chatForm.fail.enabled ? 'Включено' : 'Выключено' }}</span>
+                </label>
+              </div>
+              <textarea v-model="chatForm.fail.text" rows="2" maxlength="400" :disabled="!chatForm.fail.enabled" :class="{ bad: chatField === 'fail' }" />
+            </div>
 
             <p class="note">
               Подстановки: <code>{user}</code> имя зрителя, <code>{nick}</code> ник MemeAlerts,

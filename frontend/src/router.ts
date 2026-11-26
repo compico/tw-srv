@@ -11,7 +11,8 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: PanelPage },
-    { path: '/bot/result', component: BotResult, meta: { public: true } },
+    // bare: пустая страница без шапки и ссылок на панель (открывается в другом браузере)
+    { path: '/bot/result', component: BotResult, meta: { public: true, bare: true } },
     // Публичные страницы доступны без входа (meta.public).
     { path: '/guide/id', component: GuideId, meta: { public: true } },
     { path: '/support', component: SupportList },

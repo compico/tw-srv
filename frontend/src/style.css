@@ -123,3 +123,4 @@ textarea:disabled { opacity: .55; }
 .guide figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; }
 .guide .how { margin: 0 0 16px; padding-left: 22px; }
 .guide .how li { margin-bottom: 6px; }
+.result { font-size: 18px; margin: 0; }

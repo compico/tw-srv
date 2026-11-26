@@ -60,6 +60,7 @@ done
 | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | из шага 1 |
 | `MEMEALERTS_CLIENT_ID`, `MEMEALERTS_CLIENT_SECRET` | из шага 2 |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | необязательно, push-уведомления администратору: `docker compose run --rm memealerts vapid-keys`, результат вставить в `.env` |
+| `BOT_TWITCH_CLIENT_ID`, `BOT_TWITCH_CLIENT_SECRET` | необязательно, бот для сообщений в чат: второе приложение Twitch (тип Confidential), OAuth Redirect URL `https://DOMAIN/api/bot/callback`. Без них блока «Сообщения в чат» в панели нет, остальное работает как раньше |
 | `ADMIN_TWITCH_ID` | Twitch user id администратора поддержки. Узнать его можно, войдя в сервис один раз: id пишется в логи `memealerts` (`user=...`). Пусто: всех заявок не увидит никто |
 | `TRAEFIK_*` | необязательные; имена сети, entrypoints, certresolver и middleware, если у вас они другие. Значения по умолчанию: `proxy`, `web`, `websecure`, `cloudflare`, `default-headers@file`, `https-redirect@file` |
 
@@ -83,6 +84,7 @@ docker compose logs -f
 - [ ] Кнопка «Поддержка» открывает список заявок; созданная заявка появляется в нём
 - [ ] После заполнения `ADMIN_TWITCH_ID` и `docker compose up -d` на странице «Поддержка» есть вкладка «Все заявки»
 - [ ] (если заданы VAPID-ключи) На странице «Поддержка» у администратора есть карточка уведомлений: «Включить на этом устройстве» и «Отправить тест» показывают уведомление
+- [ ] (если заданы `BOT_TWITCH_*`) В панели есть блок «Сообщения в чат»; «Подключить бота» открывает Twitch с выбором аккаунта и возвращает в панель с надписью «Бот подключён»
 - [ ] Награда создаётся и появляется в списке наград канала Twitch (нужен аффилиат или партнёр)
 
 gRPC-порт `9090` наружу не публикуется, он доступен только внутри сети compose.

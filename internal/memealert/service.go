@@ -63,6 +63,7 @@ type Service struct {
 	log         *slog.Logger
 	redirectURI string
 	listeners   Listeners
+	chat        ChatNotifier // необязательно: сообщения в чат после исхода заявки
 
 	maLocks       sync.Map // twitchUserID -> *sync.Mutex (обновление токена MemeAlerts)
 	streamerLocks sync.Map // twitchUserID -> *sync.Mutex (последовательная обработка заявок)

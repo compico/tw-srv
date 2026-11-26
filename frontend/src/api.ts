@@ -84,6 +84,18 @@ export interface PushStatus {
   devices: number
 }
 
+export interface ChatTemplate {
+  enabled: boolean
+  text: string
+}
+
+export interface ChatState {
+  available: boolean
+  bot: { connected: boolean; login?: string; needsReauth: boolean; lastError?: string }
+  templates: { success: ChatTemplate; fail: ChatTemplate }
+  variables: string[]
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -161,4 +173,24 @@ export const pushApi = {
   subscribe: (sub: PushSubscriptionJSON) => postCsrf<void>('/api/push/subscribe', sub),
   unsubscribe: (endpoint: string) => postCsrf<void>('/api/push/unsubscribe', { endpoint }),
   test: () => postCsrf<{ sent: number }>('/api/push/test'),
+}
+
+export const chatApi = {
+  state: () => request<ChatState>('GET', '/api/chat'),
+  saveTemplates: (t: ChatState['templates']) => postCsrf<ChatState['templates']>('/api/chat/templates', t),
+  disconnectBot: () => deleteCsrf<void>('/api/bot'),
+}
+
+async function deleteCsrf<T>(url: string): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: { Accept: 'application/json', [CSRF_HEADER]: await csrfToken(attempt > 0) },
+    })
+    if (res.status === 204) return undefined as T
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) return data as T
+    if (res.status === 403 && data.code === 'csrf' && attempt === 0) continue
+    throw new ApiError(data.error ?? `Ошибка ${res.status}`, res.status, data.code)
+  }
 }

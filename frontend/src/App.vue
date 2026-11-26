@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import Landing from './components/Landing.vue'
 import { loadSession, logout, session } from './session'
 
+const route = useRoute()
 onMounted(loadSession)
 
 // После входа возвращаем на ту же страницу, где пользователь был.
@@ -23,7 +25,9 @@ const loginUrl = () => `/auth/twitch/login?return_to=${encodeURIComponent(locati
       </div>
     </header>
 
-    <section v-if="session.phase === 'loading'" class="card muted">Загрузка…</section>
+    <RouterView v-if="route.meta.public" />
+
+    <section v-else-if="session.phase === 'loading'" class="card muted">Загрузка…</section>
 
     <Landing v-else-if="session.phase === 'anon'" :login-url="loginUrl()" />
 

@@ -239,7 +239,7 @@ onUnmounted(() => window.clearInterval(timer))
             <label class="check">
               <input v-model="form.useUserInput" type="checkbox" />
               Зритель вводит ник MemeAlerts
-              <small>Если выключено, используется его ник на Twitch.</small>
+              <small>Если выключено, используется его ник на Twitch. Зритель может указать ID вместо ника: <RouterLink to="/guide/id">как найти ID</RouterLink>.</small>
             </label>
 
             <h3>Как часто можно использовать</h3>

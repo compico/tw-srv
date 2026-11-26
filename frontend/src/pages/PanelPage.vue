@@ -87,6 +87,28 @@ async function disconnectBot() {
   }
 }
 
+// Ссылка подключения для другого браузера (приватное окно с аккаунтом бота).
+const botLink = ref('')
+const botLinkBusy = ref(false)
+
+async function copyBotLink() {
+  botLinkBusy.value = true
+  try {
+    const { url } = await chatApi.botLink()
+    botLink.value = url
+    try {
+      await navigator.clipboard.writeText(url)
+      say('ok', 'Ссылка скопирована. Откройте её в приватном окне браузера; она действует 10 минут и работает один раз.')
+    } catch {
+      say('ok', 'Скопируйте ссылку из поля ниже и откройте её в приватном окне; она действует 10 минут.')
+    }
+  } catch (e) {
+    say('err', e instanceof Error ? e.message : 'Не удалось создать ссылку')
+  } finally {
+    botLinkBusy.value = false
+  }
+}
+
 const botReady = computed(() => !!chat.value?.bot.connected)
 
 function say(kind: 'ok' | 'err', text: string) {
@@ -166,14 +188,12 @@ const fmt = (iso: string) =>
   new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 let timer: number | undefined
+let botTimer: number | undefined
 onMounted(() => {
   // Сообщения после возврата с MemeAlerts: /?memealerts=connected | /?memealerts_error=...
   const q = new URLSearchParams(location.search)
   if (q.get('memealerts') === 'connected') say('ok', 'MemeAlerts подключён')
   else if (q.get('memealerts_error')) say('err', 'Не удалось подключить MemeAlerts, попробуйте ещё раз')
-  else if (q.get('bot') === 'connected') say('ok', 'Бот подключён')
-  else if (q.get('bot') === 'bad_scope') say('err', 'Не выданы нужные права: бот должен писать в чат')
-  else if (q.get('bot')) say('err', 'Не удалось подключить бота, попробуйте ещё раз')
   else if (q.get('login_error')) say('err', 'Вход через Twitch отменён')
   if (q.toString()) history.replaceState(null, '', '/')
 
@@ -181,8 +201,15 @@ onMounted(() => {
   loadHistory()
   loadChat()
   timer = window.setInterval(loadHistory, 15000)
+  // Бот мог подключиться в другом браузере: пока не подключён, проверяем состояние.
+  botTimer = window.setInterval(() => {
+    if (chat.value?.available && !botReady.value) loadChat()
+  }, 5000)
 })
-onUnmounted(() => window.clearInterval(timer))
+onUnmounted(() => {
+  window.clearInterval(timer)
+  window.clearInterval(botTimer)
+})
 </script>
 
 <template>
@@ -293,7 +320,15 @@ onUnmounted(() => window.clearInterval(timer))
             Бот отвечает зрителю в чате о результате обмена. Лучше подключить отдельный аккаунт бота;
             Twitch спросит, под каким аккаунтом войти. Просить права на управление наградами не нужно: только писать в чат.
           </p>
-          <a class="btn primary" href="/api/bot/connect">Подключить бота</a>
+          <div class="actions">
+            <a class="btn primary" href="/api/bot/connect">Подключить бота</a>
+            <button class="btn" type="button" :disabled="botLinkBusy" @click="copyBotLink">Скопировать ссылку для другого браузера</button>
+          </div>
+          <input v-if="botLink" class="linkbox" type="text" readonly :value="botLink" aria-label="Ссылка авторизации бота" @focus="($event.target as HTMLInputElement).select()" />
+          <p v-if="botLink" class="note">
+            Откройте ссылку в приватном окне и войдите под аккаунтом бота. После подтверждения эта страница сама покажет бота.
+            Ссылка одноразовая и действует 10 минут: не показывайте её другим.
+          </p>
         </template>
 
         <form @submit.prevent="saveChat">

@@ -22,8 +22,9 @@ type RouteRegistrar func(api fiber.Router, identityOf func(fiber.Ctx) twitch.Ide
 type HTTPConfig struct {
 	CookieName   string // имя cookie сессии (его выставляет сервис twitch-auth)
 	CookieSecure bool
-	View         *view.View       // HTML-оболочка и ассеты Vite
-	Extra        []RouteRegistrar // маршруты других доменов под /api
+	View         *view.View         // HTML-оболочка и ассеты Vite
+	Extra        []RouteRegistrar   // маршруты других доменов под /api
+	Public       []func(*fiber.App) // маршруты без проверки сессии (регистрируются раньше группы /api)
 }
 
 type HTTP struct {
@@ -44,6 +45,10 @@ const (
 
 func (h *HTTP) Register(app *fiber.App) {
 	app.Get("/healthz", func(c fiber.Ctx) error { return c.SendString("ok") })
+
+	for _, register := range h.cfg.Public {
+		register(app)
+	}
 
 	api := app.Group("/api", h.requireSession)
 	api.Get("/me", h.me)

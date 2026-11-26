@@ -160,7 +160,7 @@ func run() error {
 		return err
 	}
 	botSvc := chatbot.NewService(botRepo, box, botOAuth, helix, log)
-	botHTTP := chatbot.NewHTTP(botSvc, guard, cookieSecure, log)
+	botHTTP := chatbot.NewHTTP(botSvc, guard, log)
 	manager := memealert.NewManager(ctx, svc, es, log)
 	svc.SetListeners(manager)
 	svc.SetChat(botSvc)
@@ -187,6 +187,7 @@ func run() error {
 		CookieName:   cookieName,
 		CookieSecure: cookieSecure,
 		View:         page,
+		Public:       []func(*fiber.App){botHTTP.RegisterPublic},
 		Extra:        []memealert.RouteRegistrar{supportHTTP.Register, uploadHTTP.Register, pushHTTP.Register, botHTTP.Register},
 	}, log).Register(app)
 

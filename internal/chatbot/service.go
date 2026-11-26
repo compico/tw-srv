@@ -2,6 +2,8 @@ package chatbot
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -117,18 +119,39 @@ func (s *Service) SaveTemplates(ctx context.Context, streamerID string, in Templ
 
 // ---------------------------------------------------------------- connect
 
-func (s *Service) BeginConnect(state string) (string, error) {
+// ConnectTTL: сколько живёт ссылка подключения бота.
+const ConnectTTL = 10 * time.Minute
+
+var ErrBadState = errors.New("chatbot: invalid or expired state")
+
+// BeginConnect создаёт одноразовую ссылку авторизации Twitch для бота стримера streamerID.
+// Ссылку можно открыть в любом браузере: личность стримера хранится в состоянии на сервере.
+func (s *Service) BeginConnect(ctx context.Context, streamerID string) (string, error) {
 	if s.oauth == nil {
 		return "", ErrDisabled
+	}
+	raw := make([]byte, 24)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	state := hex.EncodeToString(raw)
+	if err := s.repo.SaveState(ctx, &ConnectState{State: state, TwitchUserID: streamerID, ExpiresAt: time.Now().Add(ConnectTTL)}); err != nil {
+		return "", err
 	}
 	return s.oauth.AuthorizeURLForceVerify(state, []string{Scope}), nil
 }
 
-// CompleteConnect обменивает code на токен бота и сохраняет его (в зашифрованном виде) для канала стримера.
-func (s *Service) CompleteConnect(ctx context.Context, streamerID, code string) error {
+// CompleteConnect обменивает code на токен бота и сохраняет его (в зашифрованном виде) для стримера,
+// создавшего ссылку.
+func (s *Service) CompleteConnect(ctx context.Context, state, code string) error {
 	if s.oauth == nil {
 		return ErrDisabled
 	}
+	st, err := s.repo.TakeState(ctx, state)
+	if err != nil || time.Now().After(st.ExpiresAt) {
+		return ErrBadState
+	}
+	streamerID := st.TwitchUserID
 	tok, err := s.oauth.Exchange(ctx, code)
 	if err != nil {
 		return err

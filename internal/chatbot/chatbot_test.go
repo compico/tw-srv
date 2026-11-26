@@ -2,15 +2,19 @@ package chatbot
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/compico/tw-srv/internal/memealert"
 	"github.com/compico/tw-srv/internal/platform/sqlitedb"
+	"github.com/compico/tw-srv/internal/twitch"
 )
 
 func TestRender(t *testing.T) {
@@ -130,7 +134,7 @@ func TestDisabledService(t *testing.T) {
 		t.Fatal("без oauth функция должна быть выключена")
 	}
 	s.Notify(memealert.ChatEvent{StreamerID: "u1", Success: true}) // не должно паниковать и блокироваться
-	if _, err := s.BeginConnect("state"); err != ErrDisabled {
+	if _, err := s.BeginConnect(context.Background(), "u1"); err != ErrDisabled {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -160,3 +164,55 @@ func TestBotRepository(t *testing.T) {
 }
 
 func nilLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
+
+func newEnabledService(t *testing.T) *Service {
+	t.Helper()
+	s := newTestService(t)
+	s.oauth = twitch.NewOAuth("bot-app", "secret", "https://example.com/api/bot/callback")
+	return s
+}
+
+func TestBeginConnectCreatesOneTimeState(t *testing.T) {
+	s := newEnabledService(t)
+	ctx := context.Background()
+	link, err := s.BeginConnect(ctx, "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := url.Parse(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := u.Query()
+	if q.Get("client_id") != "bot-app" || q.Get("scope") != Scope || q.Get("force_verify") != "true" {
+		t.Fatalf("неожиданная ссылка: %s", link)
+	}
+	state := q.Get("state")
+	if len(state) < 32 {
+		t.Fatalf("state слишком короткий: %q", state)
+	}
+	st, err := s.repo.TakeState(ctx, state)
+	if err != nil || st.TwitchUserID != "u1" {
+		t.Fatalf("take: %+v %v", st, err)
+	}
+	if _, err := s.repo.TakeState(ctx, state); err == nil {
+		t.Fatal("ссылка должна работать один раз")
+	}
+}
+
+func TestCompleteConnectRejectsUnknownAndExpiredState(t *testing.T) {
+	s := newEnabledService(t)
+	ctx := context.Background()
+	if err := s.CompleteConnect(ctx, "nope", "code"); !errors.Is(err, ErrBadState) {
+		t.Fatalf("неизвестный state: %v", err)
+	}
+	if err := s.repo.SaveState(ctx, &ConnectState{State: "old", TwitchUserID: "u1", ExpiresAt: time.Now().Add(-time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompleteConnect(ctx, "old", "code"); !errors.Is(err, ErrBadState) {
+		t.Fatalf("просроченный state: %v", err)
+	}
+	if b, _ := s.repo.GetBot(ctx, "u1"); b != nil {
+		t.Fatal("бот не должен подключаться по просроченной ссылке")
+	}
+}

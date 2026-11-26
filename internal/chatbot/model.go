@@ -23,6 +23,14 @@ type Bot struct {
 	UpdatedAt       time.Time
 }
 
+// ConnectState: одноразовая ссылка подключения бота. Хранится на сервере, а не в cookie браузера:
+// так подключить бота можно из другого браузера (например, приватного окна с другим аккаунтом).
+type ConnectState struct {
+	State        string    `gorm:"primaryKey;size:64"`
+	TwitchUserID string    `gorm:"size:32"`
+	ExpiresAt    time.Time `gorm:"index"`
+}
+
 // Settings: шаблоны сообщений. По умолчанию всё выключено.
 type Settings struct {
 	TwitchUserID   string `gorm:"primaryKey;size:32"`

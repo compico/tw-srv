@@ -178,6 +178,7 @@ export const pushApi = {
 export const chatApi = {
   state: () => request<ChatState>('GET', '/api/chat'),
   saveTemplates: (t: ChatState['templates']) => postCsrf<ChatState['templates']>('/api/chat/templates', t),
+  botLink: () => postCsrf<{ url: string; expiresInSeconds: number }>('/api/bot/link'),
   disconnectBot: () => deleteCsrf<void>('/api/bot'),
 }
 

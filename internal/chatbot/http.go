@@ -1,8 +1,6 @@
 package chatbot
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -14,18 +12,15 @@ import (
 	"github.com/compico/tw-srv/internal/twitch"
 )
 
-const stateCookie = "oc_bot_state"
-
 type HTTP struct {
-	svc          *Service
-	guard        *webguard.Guard
-	cookieSecure bool
-	log          *slog.Logger
-	identityOf   func(fiber.Ctx) twitch.Identity
+	svc        *Service
+	guard      *webguard.Guard
+	log        *slog.Logger
+	identityOf func(fiber.Ctx) twitch.Identity
 }
 
-func NewHTTP(svc *Service, guard *webguard.Guard, cookieSecure bool, log *slog.Logger) *HTTP {
-	return &HTTP{svc: svc, guard: guard, cookieSecure: cookieSecure, log: log}
+func NewHTTP(svc *Service, guard *webguard.Guard, log *slog.Logger) *HTTP {
+	return &HTTP{svc: svc, guard: guard, log: log}
 }
 
 // Register добавляет маршруты в группу /api (сессия уже проверена):
@@ -33,7 +28,8 @@ func NewHTTP(svc *Service, guard *webguard.Guard, cookieSecure bool, log *slog.L
 //	GET    /api/chat            состояние: бот и шаблоны
 //	POST   /api/chat/templates  сохранить шаблоны {success:{enabled,text}, fail:{enabled,text}}
 //	GET    /api/bot/connect     начало подключения бота (редирект на Twitch)
-//	GET    /api/bot/callback    возврат с Twitch
+//	POST   /api/bot/link        ссылка авторизации для другого браузера {url}
+//	GET    /api/bot/callback    возврат с Twitch (публичный, см. RegisterPublic)
 //	DELETE /api/bot             отключить бота
 func (h *HTTP) Register(api fiber.Router, identityOf func(fiber.Ctx) twitch.Identity) {
 	h.identityOf = identityOf
@@ -42,8 +38,13 @@ func (h *HTTP) Register(api fiber.Router, identityOf func(fiber.Ctx) twitch.Iden
 	api.Get("/chat", h.state)
 	api.Post("/chat/templates", h.guard.Protect, h.saveTemplates)
 	api.Get("/bot/connect", h.connect)
-	api.Get("/bot/callback", h.callback)
+	api.Post("/bot/link", h.guard.Protect, h.link)
 	api.Delete("/bot", h.guard.Protect, h.disconnect)
+}
+
+// RegisterPublic регистрирует маршруты без проверки сессии (возврат с Twitch).
+func (h *HTTP) RegisterPublic(app *fiber.App) {
+	app.Get("/api/bot/callback", h.callback)
 }
 
 type botDTO struct {
@@ -85,43 +86,51 @@ func (h *HTTP) saveTemplates(c fiber.Ctx) error {
 	return c.JSON(out)
 }
 
+// connect: подключение в этом же браузере (редирект на Twitch).
 func (h *HTTP) connect(c fiber.Ctx) error {
-	if !h.svc.Enabled() {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Бот для чата не настроен на этом сервере"})
-	}
-	raw := make([]byte, 16)
-	if _, err := rand.Read(raw); err != nil {
-		return h.fail(c, err)
-	}
-	state := hex.EncodeToString(raw)
-	authURL, err := h.svc.BeginConnect(state)
+	authURL, err := h.begin(c)
 	if err != nil {
 		return h.fail(c, err)
 	}
-	c.Cookie(&fiber.Cookie{
-		Name: stateCookie, Value: state, Path: "/api/bot", MaxAge: 600,
-		HTTPOnly: true, Secure: h.cookieSecure, SameSite: "Lax",
-	})
 	c.Set("Location", authURL)
 	return c.SendStatus(fiber.StatusFound)
 }
 
+// link: ссылка авторизации для другого браузера (например, приватного окна с аккаунтом бота).
+func (h *HTTP) link(c fiber.Ctx) error {
+	authURL, err := h.begin(c)
+	if err != nil {
+		return h.fail(c, err)
+	}
+	c.Set("Cache-Control", "no-store")
+	return c.JSON(fiber.Map{"url": authURL, "expiresInSeconds": int(ConnectTTL.Seconds())})
+}
+
+func (h *HTTP) begin(c fiber.Ctx) (string, error) {
+	return h.svc.BeginConnect(c.Context(), h.identityOf(c).UserID)
+}
+
+// callback открыт без сессии: возврат с Twitch может прийти в другой браузер. Доверие даёт одноразовое
+// состояние, созданное вошедшим стримером. Результат показывает публичная страница /bot/result.
 func (h *HTTP) callback(c fiber.Ctx) error {
 	back := func(val string) error {
-		c.Cookie(&fiber.Cookie{Name: stateCookie, Value: "", Path: "/api/bot", MaxAge: -1, HTTPOnly: true, Secure: h.cookieSecure, SameSite: "Lax"})
-		c.Set("Location", "/?bot="+url.QueryEscape(val))
+		c.Set("Cache-Control", "no-store")
+		c.Set("Location", "/bot/result?status="+url.QueryEscape(val))
 		return c.SendStatus(fiber.StatusFound)
 	}
 	if e := c.Query("error"); e != "" {
 		return back("denied")
 	}
 	state, code := c.Query("state"), c.Query("code")
-	if state == "" || code == "" || state != c.Cookies(stateCookie) {
+	if state == "" || code == "" {
 		return back("bad_state")
 	}
-	if err := h.svc.CompleteConnect(c.Context(), h.identityOf(c).UserID, code); err != nil {
+	if err := h.svc.CompleteConnect(c.Context(), state, code); err != nil {
 		h.log.Warn("chatbot: complete connect", "err", err)
-		if errors.Is(err, ErrBadScope) {
+		switch {
+		case errors.Is(err, ErrBadState):
+			return back("bad_state")
+		case errors.Is(err, ErrBadScope):
 			return back("bad_scope")
 		}
 		return back("failed")

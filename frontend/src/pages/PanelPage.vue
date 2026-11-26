@@ -46,7 +46,13 @@ const chat = ref<ChatState | null>(null)
 const chatForm = reactive<ChatState['templates']>({
   success: { enabled: false, text: '' },
   fail: { enabled: false, text: '' },
+  duplicate: { enabled: false, text: '' },
 })
+const chatKinds = [
+  { key: 'success', title: 'Когда мемкоины начислены' },
+  { key: 'duplicate', title: 'Когда ник есть у нескольких саппортеров (в тексте ссылка на гайд про ID)' },
+  { key: 'fail', title: 'Когда начислить не получилось (баллы возвращены)' },
+] as const
 const chatSaving = ref(false)
 const chatField = ref('')
 
@@ -56,6 +62,7 @@ async function loadChat() {
     chat.value = st
     Object.assign(chatForm.success, st.templates.success)
     Object.assign(chatForm.fail, st.templates.fail)
+    Object.assign(chatForm.duplicate, st.templates.duplicate)
   } catch {
     chat.value = null
   }
@@ -65,7 +72,7 @@ async function saveChat() {
   chatField.value = ''
   chatSaving.value = true
   try {
-    await chatApi.saveTemplates({ success: { ...chatForm.success }, fail: { ...chatForm.fail } })
+    await chatApi.saveTemplates({ success: { ...chatForm.success }, fail: { ...chatForm.fail }, duplicate: { ...chatForm.duplicate } })
     say('ok', 'Сообщения для чата сохранены')
   } catch (e) {
     if (e instanceof ApiError) {
@@ -333,31 +340,21 @@ onUnmounted(() => {
 
         <form @submit.prevent="saveChat">
           <fieldset :disabled="chatSaving">
-            <div class="msg" :class="{ off: !chatForm.success.enabled }">
+            <div v-for="k in chatKinds" :key="k.key" class="msg" :class="{ off: !chatForm[k.key].enabled }">
               <div class="msg-head">
-                <span>Когда мемкоины начислены</span>
+                <span>{{ k.title }}</span>
                 <label class="switch">
-                  <input v-model="chatForm.success.enabled" type="checkbox" role="switch" aria-label="Сообщение об успехе" />
-                  <span>{{ chatForm.success.enabled ? 'Включено' : 'Выключено' }}</span>
+                  <input v-model="chatForm[k.key].enabled" type="checkbox" role="switch" :aria-label="k.title" />
+                  <span>{{ chatForm[k.key].enabled ? 'Включено' : 'Выключено' }}</span>
                 </label>
               </div>
-              <textarea v-model="chatForm.success.text" rows="2" maxlength="400" :disabled="!chatForm.success.enabled" :class="{ bad: chatField === 'success' }" />
-            </div>
-
-            <div class="msg" :class="{ off: !chatForm.fail.enabled }">
-              <div class="msg-head">
-                <span>Когда начислить не получилось (баллы возвращены)</span>
-                <label class="switch">
-                  <input v-model="chatForm.fail.enabled" type="checkbox" role="switch" aria-label="Сообщение о неудаче" />
-                  <span>{{ chatForm.fail.enabled ? 'Включено' : 'Выключено' }}</span>
-                </label>
-              </div>
-              <textarea v-model="chatForm.fail.text" rows="2" maxlength="400" :disabled="!chatForm.fail.enabled" :class="{ bad: chatField === 'fail' }" />
+              <textarea v-model="chatForm[k.key].text" rows="2" maxlength="400" :disabled="!chatForm[k.key].enabled" :class="{ bad: chatField === k.key }" />
             </div>
 
             <p class="note">
               Подстановки: <code>{user}</code> имя зрителя, <code>{nick}</code> ник MemeAlerts,
-              <code>{amount}</code> число мемкоинов, <code>{reason}</code> причина (для неудачи).
+              <code>{amount}</code> число мемкоинов, <code>{reason}</code> причина (для неудачи),
+              <code>{guide}</code> ссылка на гайд «как найти свой ID». Если сообщение про дубликаты выключено, в этом случае уходит сообщение о неудаче.
               {{ botReady ? '' : 'Сообщения будут отправляться после подключения бота.' }}
             </p>
             <div class="actions">

@@ -11,7 +11,7 @@ import (
 
 // Переменные шаблона: {user} имя зрителя, {nick} ник MemeAlerts, {amount} число мемкоинов,
 // {reason} причина возврата (только для сообщения о неудаче).
-var Variables = []string{"{user}", "{nick}", "{amount}", "{reason}"}
+var Variables = []string{"{user}", "{nick}", "{amount}", "{reason}", "{guide}"}
 
 // clean убирает управляющие символы и переводы строк и обрезает значение, пришедшее от зрителя.
 func clean(s string, max int) string {
@@ -40,6 +40,7 @@ func Render(tpl string, ev memealert.ChatEvent) string {
 		"{nick}", clean(ev.Nick, 40),
 		"{amount}", strconv.Itoa(ev.Amount),
 		"{reason}", clean(ev.Reason, 200),
+		"{guide}", clean(ev.GuideURL, 200),
 	).Replace(tpl)
 	out = clean(out, MaxMessageRunes)
 	return strings.TrimLeft(out, "/. ")

@@ -73,7 +73,7 @@ func newTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewService(repo, nil, nil, nil, nilLogger())
+	return NewService(repo, nil, nil, nil, "https://example.com/", nilLogger())
 }
 
 func TestTemplatesDefaultOff(t *testing.T) {
@@ -214,5 +214,40 @@ func TestCompleteConnectRejectsUnknownAndExpiredState(t *testing.T) {
 	}
 	if b, _ := s.repo.GetBot(ctx, "u1"); b != nil {
 		t.Fatal("бот не должен подключаться по просроченной ссылке")
+	}
+}
+
+func TestRenderGuide(t *testing.T) {
+	ev := memealert.ChatEvent{ViewerName: "x", Nick: "bob", GuideURL: "https://example.com/guide/id"}
+	got := Render(DefaultDuplicateText, ev)
+	if !strings.Contains(got, "https://example.com/guide/id") || !strings.Contains(got, "«bob»") || strings.Contains(got, "{") {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestDuplicateTemplateDefaultsAndPersistence(t *testing.T) {
+	s := newTestService(t)
+	ctx := context.Background()
+	tpl, _ := s.Templates(ctx, "u1")
+	if tpl.Duplicate.Enabled || tpl.Duplicate.Text != DefaultDuplicateText {
+		t.Fatalf("по умолчанию выключено с текстом-гайдом: %+v", tpl.Duplicate)
+	}
+	if _, err := s.SaveTemplates(ctx, "u1", Templates{Duplicate: Template{Enabled: true, Text: "дубль {guide}"}}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Templates(ctx, "u1")
+	if !got.Duplicate.Enabled || got.Duplicate.Text != "дубль {guide}" {
+		t.Fatalf("got %+v", got.Duplicate)
+	}
+	// Строка настроек без текста дубликата (создана старой версией) получает текст по умолчанию.
+	if err := s.repo.SaveSettings(ctx, &Settings{TwitchUserID: "old", SuccessText: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	old, _ := s.Templates(ctx, "old")
+	if old.Duplicate.Text != DefaultDuplicateText || old.Duplicate.Enabled {
+		t.Fatalf("got %+v", old.Duplicate)
+	}
+	if _, err := s.SaveTemplates(ctx, "u1", Templates{Duplicate: Template{Enabled: true}}); err == nil {
+		t.Fatal("включённое пустое сообщение должно отклоняться")
 	}
 }

@@ -33,17 +33,22 @@ type ConnectState struct {
 
 // Settings: шаблоны сообщений. По умолчанию всё выключено.
 type Settings struct {
-	TwitchUserID   string `gorm:"primaryKey;size:32"`
-	SuccessEnabled bool
-	SuccessText    string
-	FailEnabled    bool
-	FailText       string
-	UpdatedAt      time.Time
+	TwitchUserID     string `gorm:"primaryKey;size:32"`
+	SuccessEnabled   bool
+	SuccessText      string
+	FailEnabled      bool
+	FailText         string
+	DuplicateEnabled bool // отдельное сообщение, если ник есть у нескольких саппортеров
+	DuplicateText    string
+	UpdatedAt        time.Time
 }
 
 const (
 	DefaultSuccessText = "@{user}, мемкоины ({amount}) начислены на твой аккаунт MemeAlerts!"
 	DefaultFailText    = "@{user}, мемкоины не начислены: {reason}. Баллы возвращены."
+
+	// {guide} подставляется адресом страницы-гайда «как найти свой ID».
+	DefaultDuplicateText = "@{user}, ник «{nick}» есть у нескольких саппортеров, баллы возвращены. Укажи вместо ника свой ID: {guide}"
 
 	MaxTemplateRunes = 400
 	MaxMessageRunes  = 500 // лимит Twitch

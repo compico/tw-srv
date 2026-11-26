@@ -159,7 +159,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	botSvc := chatbot.NewService(botRepo, box, botOAuth, helix, log)
+	botSvc := chatbot.NewService(botRepo, box, botOAuth, helix, publicURL, log)
 	botHTTP := chatbot.NewHTTP(botSvc, guard, log)
 	manager := memealert.NewManager(ctx, svc, es, log)
 	svc.SetListeners(manager)

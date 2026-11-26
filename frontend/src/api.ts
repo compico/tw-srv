@@ -92,7 +92,7 @@ export interface ChatTemplate {
 export interface ChatState {
   available: boolean
   bot: { connected: boolean; login?: string; needsReauth: boolean; lastError?: string }
-  templates: { success: ChatTemplate; fail: ChatTemplate }
+  templates: { success: ChatTemplate; fail: ChatTemplate; duplicate: ChatTemplate }
   variables: string[]
 }
 

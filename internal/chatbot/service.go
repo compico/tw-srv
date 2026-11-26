@@ -43,12 +43,14 @@ type Service struct {
 	helix *twitch.Helix
 	log   *slog.Logger
 
+	guideURL string // адрес страницы-гайда для подстановки {guide}
+
 	locks   sync.Map // streamerID -> *sync.Mutex (отправка и обновление токена)
 	pending sync.Map // streamerID -> *atomic.Int32
 }
 
-func NewService(repo *Repository, box *secretbox.Box, oauth *twitch.OAuth, helix *twitch.Helix, log *slog.Logger) *Service {
-	return &Service{repo: repo, box: box, oauth: oauth, helix: helix, log: log}
+func NewService(repo *Repository, box *secretbox.Box, oauth *twitch.OAuth, helix *twitch.Helix, publicURL string, log *slog.Logger) *Service {
+	return &Service{repo: repo, box: box, oauth: oauth, helix: helix, log: log, guideURL: strings.TrimRight(publicURL, "/") + "/guide/id"}
 }
 
 func (s *Service) Enabled() bool { return s.oauth != nil }
@@ -68,6 +70,8 @@ type Template struct {
 type Templates struct {
 	Success Template `json:"success"`
 	Fail    Template `json:"fail"`
+	// Duplicate: ник есть у нескольких саппортеров. Если выключено, в этом случае уходит сообщение о неудаче.
+	Duplicate Template `json:"duplicate"`
 }
 
 func (s *Service) Templates(ctx context.Context, streamerID string) (Templates, error) {
@@ -77,13 +81,19 @@ func (s *Service) Templates(ctx context.Context, streamerID string) (Templates, 
 	}
 	if st == nil {
 		return Templates{
-			Success: Template{Text: DefaultSuccessText},
-			Fail:    Template{Text: DefaultFailText},
+			Success:   Template{Text: DefaultSuccessText},
+			Fail:      Template{Text: DefaultFailText},
+			Duplicate: Template{Text: DefaultDuplicateText},
 		}, nil
 	}
+	dup := Template{Enabled: st.DuplicateEnabled, Text: st.DuplicateText}
+	if dup.Text == "" { // строка создана до появления этого сообщения
+		dup.Text = DefaultDuplicateText
+	}
 	return Templates{
-		Success: Template{Enabled: st.SuccessEnabled, Text: st.SuccessText},
-		Fail:    Template{Enabled: st.FailEnabled, Text: st.FailText},
+		Success:   Template{Enabled: st.SuccessEnabled, Text: st.SuccessText},
+		Fail:      Template{Enabled: st.FailEnabled, Text: st.FailText},
+		Duplicate: dup,
 	}, nil
 }
 
@@ -106,13 +116,18 @@ func (s *Service) SaveTemplates(ctx context.Context, streamerID string, in Templ
 	if in.Fail, err = normalizeTemplate("fail", in.Fail); err != nil {
 		return in, err
 	}
+	if in.Duplicate, err = normalizeTemplate("duplicate", in.Duplicate); err != nil {
+		return in, err
+	}
 	err = s.repo.SaveSettings(ctx, &Settings{
-		TwitchUserID:   streamerID,
-		SuccessEnabled: in.Success.Enabled,
-		SuccessText:    in.Success.Text,
-		FailEnabled:    in.Fail.Enabled,
-		FailText:       in.Fail.Text,
-		UpdatedAt:      time.Now(),
+		TwitchUserID:     streamerID,
+		SuccessEnabled:   in.Success.Enabled,
+		SuccessText:      in.Success.Text,
+		FailEnabled:      in.Fail.Enabled,
+		FailText:         in.Fail.Text,
+		DuplicateEnabled: in.Duplicate.Enabled,
+		DuplicateText:    in.Duplicate.Text,
+		UpdatedAt:        time.Now(),
 	})
 	return in, err
 }
@@ -249,9 +264,13 @@ func (s *Service) deliver(ctx context.Context, ev memealert.ChatEvent) {
 		return
 	}
 	tpl, on := st.FailText, st.FailEnabled
-	if ev.Success {
+	switch {
+	case ev.Success:
 		tpl, on = st.SuccessText, st.SuccessEnabled
+	case ev.Duplicate && st.DuplicateEnabled && st.DuplicateText != "":
+		tpl, on = st.DuplicateText, true
 	}
+	ev.GuideURL = s.guideURL
 	if !on {
 		return
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/compico/tw-srv/internal/authclient"
+	"github.com/compico/tw-srv/internal/chatbot"
 	"github.com/compico/tw-srv/internal/memealert"
 	"github.com/compico/tw-srv/internal/platform/config"
 	"github.com/compico/tw-srv/internal/platform/secretbox"
@@ -72,6 +73,10 @@ func run() error {
 	// Источники, которым разрешены запросы к API с cookie (CORS). Адрес сайта (PUBLIC_URL) разрешён всегда;
 	// переменная нужна, например, для локальной разработки (http://localhost:8080).
 	extraOrigins := env.List("CORS_ALLOWED_ORIGINS", nil)
+	// Бот для чата (необязательно): отдельное Twitch-приложение, чтобы не трогать основную авторизацию.
+	// Redirect URL приложения: <PUBLIC_URL>/api/bot/callback. Без обеих переменных функция выключена.
+	botClientID := env.String("BOT_TWITCH_CLIENT_ID", "")
+	botClientSecret := env.String("BOT_TWITCH_CLIENT_SECRET", "")
 	dev := env.Bool("DEV", false)
 	viteURL := env.String("VITE_DEV_URL", "http://localhost:5173")
 	if err := env.Err(); err != nil {
@@ -144,8 +149,21 @@ func run() error {
 	helix := twitch.NewHelix()
 	es := twitch.NewEventSub(helix, log)
 	svc := memealert.NewService(repo, memealert.NewAPIClient(maClientID, maClientSecret), box, authc, helix, publicURL, log)
+	var botOAuth *twitch.OAuth
+	if botClientID != "" && botClientSecret != "" {
+		botOAuth = twitch.NewOAuth(botClientID, botClientSecret, publicURL+"/api/bot/callback")
+	} else {
+		log.Info("бот для чата выключен: задайте BOT_TWITCH_CLIENT_ID и BOT_TWITCH_CLIENT_SECRET")
+	}
+	botRepo, err := chatbot.NewRepository(db)
+	if err != nil {
+		return err
+	}
+	botSvc := chatbot.NewService(botRepo, box, botOAuth, helix, log)
+	botHTTP := chatbot.NewHTTP(botSvc, guard, cookieSecure, log)
 	manager := memealert.NewManager(ctx, svc, es, log)
 	svc.SetListeners(manager)
+	svc.SetChat(botSvc)
 
 	go svc.RunTokenRefresher(ctx)
 
@@ -169,7 +187,7 @@ func run() error {
 		CookieName:   cookieName,
 		CookieSecure: cookieSecure,
 		View:         page,
-		Extra:        []memealert.RouteRegistrar{supportHTTP.Register, uploadHTTP.Register, pushHTTP.Register},
+		Extra:        []memealert.RouteRegistrar{supportHTTP.Register, uploadHTTP.Register, pushHTTP.Register, botHTTP.Register},
 	}, log).Register(app)
 
 	go func() {

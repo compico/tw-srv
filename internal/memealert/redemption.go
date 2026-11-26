@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -97,49 +98,57 @@ func (s *Service) process(ctx context.Context, rw *Reward, rd *Redemption) {
 
 	acc, err := s.repo.GetAccount(ctx, uid)
 	if err != nil || acc.Invalid {
-		s.refund(ctx, rw, rd, "У стримера отключена интеграция с MemeAlerts")
+		s.refundPublic(ctx, rw, rd, "У стримера отключена интеграция с MemeAlerts", "у стримера отключена интеграция с MemeAlerts")
 		return
 	}
 
 	nicks := candidates(rw, rd)
 	if len(nicks) == 0 {
-		s.refund(ctx, rw, rd, "Не указан ник MemeAlerts")
+		s.refundPublic(ctx, rw, rd, "Не указан ник MemeAlerts", "не указан ник MemeAlerts")
 		return
 	}
 
 	var (
-		sup Supporter
-		res = matchNone
+		sup   Supporter
+		res   = matchNone
+		dupes []Supporter
+		nick  string // ник, по которому нашли (или первый, если не нашли)
 	)
-	for _, nick := range nicks {
+	for i, n := range nicks {
 		err := s.withRetry(ctx, func() error {
 			var e error
-			sup, res, e = s.lookup(ctx, uid, nick)
+			sup, res, dupes, e = s.lookup(ctx, uid, n)
 			return e
 		})
 		if err != nil {
 			s.log.Warn("supporter lookup failed", "redemption", rd.ID, "err", err)
 			if errors.Is(err, ErrMemeAlertsReauth) {
-				s.refund(ctx, rw, rd, "У стримера отключена интеграция с MemeAlerts")
+				s.refundPublic(ctx, rw, rd, "У стримера отключена интеграция с MemeAlerts", "у стримера отключена интеграция с MemeAlerts")
 			} else {
-				s.refund(ctx, rw, rd, "MemeAlerts временно недоступен, попробуйте позже")
+				s.refundPublic(ctx, rw, rd, "MemeAlerts временно недоступен, попробуйте позже", "MemeAlerts временно недоступен, попробуйте позже")
 			}
 			return
 		}
-		if res != matchNone {
+		nick = n
+		if res != matchNone || i == len(nicks)-1 {
 			break
 		}
+	}
+	if res == matchNone {
+		nick = nicks[0]
 	}
 
 	switch res {
 	case matchNone:
-		s.refund(ctx, rw, rd, fmt.Sprintf("Ник «%s» не найден среди саппортеров стримера", nicks[0]))
+		msg := fmt.Sprintf("Ник «%s» не найден среди саппортеров стримера", nick)
+		s.refundPublic(ctx, rw, rd, msg, fmt.Sprintf("ник «%s» не найден среди саппортеров", nick))
 		return
 	case matchAmbiguous:
-		s.refund(ctx, rw, rd, fmt.Sprintf("Ник «%s» подходит нескольким пользователям, уточните ник", nicks[0]))
+		s.refundPublic(ctx, rw, rd, ambiguousReason(nick, dupes, rw.UseUserInput),
+			fmt.Sprintf("ник «%s» принадлежит нескольким пользователям: укажите ссылку memealerts.com/... или ID вместо ника", nick))
 		return
 	case matchMuted:
-		s.refund(ctx, rw, rd, "Стример заблокировал этого пользователя в MemeAlerts")
+		s.refundPublic(ctx, rw, rd, "Стример заблокировал этого пользователя в MemeAlerts", "начисление для этого пользователя недоступно")
 		return
 	}
 
@@ -148,7 +157,7 @@ func (s *Service) process(ctx context.Context, rw *Reward, rd *Redemption) {
 	if err != nil {
 		// Без записи в журнал не рискуем выдавать бонус.
 		s.log.Error("persist giving state", "redemption", rd.ID, "err", err)
-		s.refund(ctx, rw, rd, "Внутренняя ошибка, попробуйте позже")
+		s.refundPublic(ctx, rw, rd, "Внутренняя ошибка, попробуйте позже", "внутренняя ошибка, попробуйте позже")
 		return
 	}
 
@@ -160,9 +169,10 @@ func (s *Service) process(ctx context.Context, rw *Reward, rd *Redemption) {
 		s.setStatus(ctx, rd.ID, StatusFulfilled, "")
 		s.log.Info("bonus given", "redemption", rd.ID, "supporter", sup.SupporterID, "amount", rw.BonusAmount)
 		s.finalizeTwitch(ctx, rw, rd.ID, twitch.StatusFulfilled)
+		s.notifyChat(rw, rd, sup.SupporterName, true, "")
 	case definitelyNotApplied(err):
 		s.log.Warn("bonus rejected", "redemption", rd.ID, "err", err)
-		s.refund(ctx, rw, rd, "MemeAlerts отклонил начисление: "+apiMessage(err))
+		s.refundPublic(ctx, rw, rd, "MemeAlerts отклонил начисление: "+apiMessage(err), "MemeAlerts отклонил начисление")
 	default:
 		// Запрос мог дойти: не повторяем и не возвращаем баллы, чтобы не выдать бонус дважды.
 		s.log.Error("bonus outcome unknown", "redemption", rd.ID, "err", err)
@@ -182,8 +192,14 @@ func givingFields(sup Supporter) map[string]any {
 
 // refund возвращает баллы зрителю (CANCELED) и записывает причину.
 func (s *Service) refund(ctx context.Context, rw *Reward, rd *Redemption, reason string) {
+	s.refundPublic(ctx, rw, rd, reason, reason)
+}
+
+// refundPublic: reason видит только стример (журнал в dashboard), public можно писать в чат.
+func (s *Service) refundPublic(ctx context.Context, rw *Reward, rd *Redemption, reason, public string) {
 	s.setStatus(ctx, rd.ID, StatusRefunded, reason)
 	s.finalizeTwitch(ctx, rw, rd.ID, twitch.StatusCanceled)
+	s.notifyChat(rw, rd, "", false, public)
 }
 
 func (s *Service) setStatus(ctx context.Context, id string, st RedemptionStatus, reason string) {
@@ -285,6 +301,11 @@ func candidates(rw *Reward, rd *Redemption) []string {
 	return out
 }
 
+var memeAlertsIDRe = regexp.MustCompile(`^[0-9a-fA-F]{24}$`)
+
+// isSupporterID: похоже ли значение на id пользователя MemeAlerts (24 hex-символа).
+func isSupporterID(s string) bool { return memeAlertsIDRe.MatchString(s) }
+
 func sameNick(sp Supporter, nick string) bool {
 	if strings.EqualFold(strings.TrimSpace(sp.SupporterName), nick) {
 		return true
@@ -292,41 +313,115 @@ func sameNick(sp Supporter, nick string) bool {
 	return sp.SupporterLink != "" && strings.EqualFold(sp.SupporterLink, nick)
 }
 
-func pickSupporter(found []Supporter) (Supporter, matchResult) {
-	byID := map[string]Supporter{}
-	for _, sp := range found {
-		byID[sp.SupporterID] = sp
+// matchesInput: совпадение по нику, ссылке или (для значения вида id) по id пользователя.
+func matchesInput(sp Supporter, nick string) bool {
+	if sameNick(sp, nick) {
+		return true
 	}
-	switch len(byID) {
-	case 0:
-		return Supporter{}, matchNone
-	case 1:
-		for _, sp := range byID {
-			if sp.MutedByStreamer {
-				return sp, matchMuted
-			}
-			return sp, matchFound
-		}
-	}
-	return Supporter{}, matchAmbiguous
+	return isSupporterID(nick) && strings.EqualFold(sp.SupporterID, nick)
 }
 
-// lookup ищет точное совпадение ника среди саппортеров стримера (поиск API + точная фильтрация).
-func (s *Service) lookup(ctx context.Context, userID, nick string) (Supporter, matchResult, error) {
+// pickSupporter выбирает единственного подходящего саппортера. Если ввод в точности равен id,
+// побеждает владелец этого id: id уникален, так что дубликатов имени он не боится.
+// Второй результат: найденные кандидаты при неоднозначности (иначе nil).
+func pickSupporter(found []Supporter, nick string) (Supporter, matchResult, []Supporter) {
+	byID := map[string]Supporter{}
+	var order []string
+	for _, sp := range found {
+		if _, ok := byID[sp.SupporterID]; !ok {
+			order = append(order, sp.SupporterID)
+		}
+		byID[sp.SupporterID] = sp
+	}
+	if isSupporterID(nick) {
+		for _, id := range order {
+			if strings.EqualFold(id, nick) {
+				sp := byID[id]
+				if sp.MutedByStreamer {
+					return sp, matchMuted, nil
+				}
+				return sp, matchFound, nil
+			}
+		}
+	}
+	switch len(order) {
+	case 0:
+		return Supporter{}, matchNone, nil
+	case 1:
+		sp := byID[order[0]]
+		if sp.MutedByStreamer {
+			return sp, matchMuted, nil
+		}
+		return sp, matchFound, nil
+	}
+	dupes := make([]Supporter, 0, len(order))
+	for _, id := range order {
+		dupes = append(dupes, byID[id])
+	}
+	return Supporter{}, matchAmbiguous, dupes
+}
+
+// ambiguousReason: причина для стримера (dashboard) с перечнем дубликатов.
+func ambiguousReason(nick string, dupes []Supporter, userInput bool) string {
+	const maxShown = 5
+	var b strings.Builder
+	fmt.Fprintf(&b, "Ник «%s» подходит нескольким саппортерам (%d): ", nick, len(dupes))
+	for i, d := range dupes {
+		if i == maxShown {
+			fmt.Fprintf(&b, " и ещё %d", len(dupes)-maxShown)
+			break
+		}
+		if i > 0 {
+			b.WriteString("; ")
+		}
+		fmt.Fprintf(&b, "%s (ID %s", d.SupporterName, d.SupporterID)
+		if d.SupporterLink != "" {
+			fmt.Fprintf(&b, ", memealerts.com/%s", d.SupporterLink)
+		}
+		b.WriteString(")")
+	}
+	if userInput {
+		b.WriteString(". Зритель может указать вместо ника свой ID или ссылку memealerts.com/…")
+	} else {
+		b.WriteString(". Включите у награды ввод ника: тогда зритель сможет указать свой ID или ссылку memealerts.com/…")
+	}
+	return b.String()
+}
+
+// lookup ищет точное совпадение среди саппортеров стримера (поиск API по имени + точная фильтрация).
+// Если ввод похож на id и по имени ничего нет, просматривает список саппортеров целиком:
+// поиск API работает по имени, id в нём не ищется.
+func (s *Service) lookup(ctx context.Context, userID, nick string) (Supporter, matchResult, []Supporter, error) {
+	found, err := s.scanSupporters(ctx, userID, nick, nick)
+	if err != nil {
+		return Supporter{}, matchNone, nil, err
+	}
+	if len(found) == 0 && isSupporterID(nick) {
+		found, err = s.scanSupporters(ctx, userID, "", nick)
+		if err != nil {
+			return Supporter{}, matchNone, nil, err
+		}
+	}
+	sp, res, dupes := pickSupporter(found, nick)
+	return sp, res, dupes, nil
+}
+
+// scanSupporters листает саппортеров (query пустой = все) и оставляет подходящих под ввод.
+func (s *Service) scanSupporters(ctx context.Context, userID, query, nick string) ([]Supporter, error) {
 	var found []Supporter
 	for page := 0; page < supporterMaxPages; page++ {
 		skip := page * supporterPageSize
 		var resp *SupportersPage
 		err := s.callMA(ctx, userID, func(access string) error {
 			var e error
-			resp, e = s.ma.Supporters(ctx, access, nick, skip, supporterPageSize)
+			resp, e = s.ma.Supporters(ctx, access, query, skip, supporterPageSize)
 			return e
 		})
 		if err != nil {
-			return Supporter{}, matchNone, err
+			return nil, err
 		}
 		for _, sp := range resp.Data {
-			if sameNick(sp, nick) {
+			if matchesInput(sp, nick) {
 				found = append(found, sp)
 			}
 		}
@@ -334,8 +429,7 @@ func (s *Service) lookup(ctx context.Context, userID, nick string) (Supporter, m
 			break
 		}
 	}
-	sp, res := pickSupporter(found)
-	return sp, res, nil
+	return found, nil
 }
 
 // ---------------------------------------------------------------- error classification

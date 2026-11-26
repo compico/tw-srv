@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { api, ApiError, type Redemption, type RewardForm } from '../api'
+import { api, ApiError, chatApi, type ChatState, type Redemption, type RewardForm } from '../api'
 import { loadSession, session } from '../session'
 
 const me = computed(() => session.me)
@@ -40,6 +40,54 @@ function fillForm() {
   if (!perStreamOn.value) form.maxPerStream = 100
   perUserOnce.value = form.maxPerUserPerStream > 0
 }
+
+// Сообщения в чат: бот и шаблоны. Блок необязателен: если запрос не удался, он просто не показывается.
+const chat = ref<ChatState | null>(null)
+const chatForm = reactive<ChatState['templates']>({
+  success: { enabled: false, text: '' },
+  fail: { enabled: false, text: '' },
+})
+const chatSaving = ref(false)
+const chatField = ref('')
+
+async function loadChat() {
+  try {
+    const st = await chatApi.state()
+    chat.value = st
+    Object.assign(chatForm.success, st.templates.success)
+    Object.assign(chatForm.fail, st.templates.fail)
+  } catch {
+    chat.value = null
+  }
+}
+
+async function saveChat() {
+  chatField.value = ''
+  chatSaving.value = true
+  try {
+    await chatApi.saveTemplates({ success: { ...chatForm.success }, fail: { ...chatForm.fail } })
+    say('ok', 'Сообщения для чата сохранены')
+  } catch (e) {
+    if (e instanceof ApiError) {
+      chatField.value = e.field ?? ''
+      say('err', e.message)
+    } else say('err', 'Не удалось сохранить')
+  } finally {
+    chatSaving.value = false
+  }
+}
+
+async function disconnectBot() {
+  if (!confirm('Отключить бота? Сообщения в чат отправляться не будут.')) return
+  try {
+    await chatApi.disconnectBot()
+    await loadChat()
+  } catch (e) {
+    say('err', e instanceof Error ? e.message : 'Не удалось отключить')
+  }
+}
+
+const botReady = computed(() => !!chat.value?.bot.connected)
 
 function say(kind: 'ok' | 'err', text: string) {
   flash.value = { kind, text }
@@ -123,11 +171,15 @@ onMounted(() => {
   const q = new URLSearchParams(location.search)
   if (q.get('memealerts') === 'connected') say('ok', 'MemeAlerts подключён')
   else if (q.get('memealerts_error')) say('err', 'Не удалось подключить MemeAlerts, попробуйте ещё раз')
+  else if (q.get('bot') === 'connected') say('ok', 'Бот подключён')
+  else if (q.get('bot') === 'bad_scope') say('err', 'Не выданы нужные права: бот должен писать в чат')
+  else if (q.get('bot')) say('err', 'Не удалось подключить бота, попробуйте ещё раз')
   else if (q.get('login_error')) say('err', 'Вход через Twitch отменён')
   if (q.toString()) history.replaceState(null, '', '/')
 
   fillForm()
   loadHistory()
+  loadChat()
   timer = window.setInterval(loadHistory, 15000)
 })
 onUnmounted(() => window.clearInterval(timer))
@@ -224,6 +276,50 @@ onUnmounted(() => window.clearInterval(timer))
           Если ника нет среди ваших саппортеров, баллы автоматически возвращаются зрителю.
           Лимиты за стрим считает сам Twitch.
         </p>
+      </section>
+
+      <section v-if="chat?.available" class="card">
+        <h2><span class="n">3</span> Сообщения в чат</h2>
+        <template v-if="botReady">
+          <p>
+            Пишет в чат: <b>{{ chat.bot.login }}</b>
+            <button class="btn" type="button" @click="disconnectBot">Отключить бота</button>
+          </p>
+          <p v-if="chat.bot.lastError" class="err">Последняя отправка не удалась: {{ chat.bot.lastError }}</p>
+        </template>
+        <template v-else>
+          <p v-if="chat.bot.needsReauth" class="err">Доступ бота отозван. Подключите его заново.</p>
+          <p v-else class="muted">
+            Бот отвечает зрителю в чате о результате обмена. Лучше подключить отдельный аккаунт бота;
+            Twitch спросит, под каким аккаунтом войти. Просить права на управление наградами не нужно: только писать в чат.
+          </p>
+          <a class="btn primary" href="/api/bot/connect">Подключить бота</a>
+        </template>
+
+        <form @submit.prevent="saveChat">
+          <fieldset :disabled="chatSaving">
+            <label class="check">
+              <input v-model="chatForm.success.enabled" type="checkbox" />
+              Писать в чат, когда мемкоины начислены
+            </label>
+            <textarea v-model="chatForm.success.text" rows="2" maxlength="400" :class="{ bad: chatField === 'success' }" />
+
+            <label class="check">
+              <input v-model="chatForm.fail.enabled" type="checkbox" />
+              Писать в чат, когда начислить не получилось (баллы возвращены)
+            </label>
+            <textarea v-model="chatForm.fail.text" rows="2" maxlength="400" :class="{ bad: chatField === 'fail' }" />
+
+            <p class="note">
+              Подстановки: <code>{user}</code> имя зрителя, <code>{nick}</code> ник MemeAlerts,
+              <code>{amount}</code> число мемкоинов, <code>{reason}</code> причина (для неудачи).
+              {{ botReady ? '' : 'Сообщения будут отправляться после подключения бота.' }}
+            </p>
+            <div class="actions">
+              <button class="btn primary" type="submit">{{ chatSaving ? 'Сохраняю…' : 'Сохранить сообщения' }}</button>
+            </div>
+          </fieldset>
+        </form>
       </section>
 
       <section class="card">

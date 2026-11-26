@@ -192,3 +192,29 @@ func (h *Helix) CreateEventSubSubscription(ctx context.Context, c Credentials, s
 	}
 	return h.do(ctx, c, http.MethodPost, "/eventsub/subscriptions", nil, body, nil)
 }
+
+// ChatMessageResult: ответ Helix на отправку сообщения в чат.
+type ChatMessageResult struct {
+	MessageID  string `json:"message_id"`
+	IsSent     bool   `json:"is_sent"`
+	DropReason *struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"drop_reason"`
+}
+
+// SendChatMessage пишет в чат канала от имени владельца токена (нужен scope user:write:chat;
+// senderID должен совпадать с владельцем токена). Сообщение до 500 символов.
+func (h *Helix) SendChatMessage(ctx context.Context, c Credentials, broadcasterID, senderID, message string) (*ChatMessageResult, error) {
+	var out struct {
+		Data []ChatMessageResult `json:"data"`
+	}
+	body := map[string]string{"broadcaster_id": broadcasterID, "sender_id": senderID, "message": message}
+	if err := h.do(ctx, c, http.MethodPost, "/chat/messages", nil, body, &out); err != nil {
+		return nil, err
+	}
+	if len(out.Data) == 0 {
+		return nil, io.ErrUnexpectedEOF
+	}
+	return &out.Data[0], nil
+}

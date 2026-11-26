@@ -14,6 +14,7 @@ import (
 const (
 	authorizeEndpoint = "https://id.twitch.tv/oauth2/authorize"
 	tokenEndpoint     = "https://id.twitch.tv/oauth2/token"
+	revokeEndpoint    = "https://id.twitch.tv/oauth2/revoke"
 	validateEndpoint  = "https://id.twitch.tv/oauth2/validate"
 	usersEndpoint     = "https://api.twitch.tv/helix/users"
 )
@@ -68,6 +69,25 @@ func (o *OAuth) AuthorizeURL(state string, scopes []string) string {
 	q.Set("scope", strings.Join(scopes, " "))
 	q.Set("state", state)
 	return authorizeEndpoint + "?" + q.Encode()
+}
+
+// AuthorizeURLForceVerify: то же, но Twitch всегда спрашивает, под каким аккаунтом войти
+// (нужно, чтобы подключить аккаунт бота, а не тот, что уже открыт в браузере).
+func (o *OAuth) AuthorizeURLForceVerify(state string, scopes []string) string {
+	return o.AuthorizeURL(state, scopes) + "&force_verify=true"
+}
+
+// Revoke отзывает токен (best effort: ошибку можно только залогировать).
+func (o *OAuth) Revoke(ctx context.Context, token string) error {
+	form := url.Values{}
+	form.Set("client_id", o.clientID)
+	form.Set("token", token)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, revokeEndpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return httpx.DoJSON(o.http, req, nil)
 }
 
 func (o *OAuth) Exchange(ctx context.Context, code string) (*TokenResponse, error) {

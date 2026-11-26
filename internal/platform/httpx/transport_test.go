@@ -31,6 +31,16 @@ func TestTransportSpeaksHTTP11(t *testing.T) {
 	defer srv.Close()
 
 	tr := NewTransport()
+	if tr.TLSClientConfig == nil {
+		t.Fatal("TLSClientConfig не задан")
+	}
+
+	if len(tr.TLSClientConfig.NextProtos) != 1 ||
+		tr.TLSClientConfig.NextProtos[0] != "http/1.1" {
+		t.Fatalf("ожидался только http/1.1, получено: %v",
+			tr.TLSClientConfig.NextProtos)
+	}
+
 	tr.TLSClientConfig = srv.Client().Transport.(*http.Transport).TLSClientConfig.Clone()
 	c := &http.Client{Transport: tr, Timeout: 5 * time.Second}
 	resp, err := c.Get(srv.URL)

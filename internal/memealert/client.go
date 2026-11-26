@@ -40,7 +40,7 @@ func NewAPIClient(clientID, clientSecret string) *APIClient {
 		base:         apiBase,
 		clientID:     clientID,
 		clientSecret: clientSecret,
-		http:         &http.Client{Timeout: 15 * time.Second},
+		http:         &http.Client{Timeout: 15 * time.Second, Transport: httpx.NewTransport()},
 	}
 }
 

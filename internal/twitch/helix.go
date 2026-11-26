@@ -21,7 +21,7 @@ type Helix struct {
 }
 
 func NewHelix() *Helix {
-	return &Helix{http: &http.Client{Timeout: 15 * time.Second}, base: helixBase}
+	return &Helix{http: &http.Client{Timeout: 15 * time.Second, Transport: httpx.NewTransport()}, base: helixBase}
 }
 
 // Reward: награда за баллы канала (ответ Helix).

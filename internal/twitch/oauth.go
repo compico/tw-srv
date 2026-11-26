@@ -32,7 +32,7 @@ func NewOAuth(clientID, clientSecret, redirectURI string) *OAuth {
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		redirectURI:  redirectURI,
-		http:         &http.Client{Timeout: 15 * time.Second},
+		http:         &http.Client{Timeout: 15 * time.Second, Transport: httpx.NewTransport()},
 	}
 }
 

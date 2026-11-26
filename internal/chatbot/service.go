@@ -174,10 +174,26 @@ func (s *Service) CompleteConnect(ctx context.Context, state, code string) error
 	if !hasScope(tok.Scope, Scope) {
 		return ErrBadScope
 	}
-	user, err := s.oauth.CurrentUser(ctx, tok.AccessToken)
+	// Владельца токена узнаём через id.twitch.tv (validate), а не через api.twitch.tv: тот же хост, что и обмен кода,
+	// меньше зависимостей от сети и заодно проверка выданных прав. Запрос безопасно повторить.
+	var val *twitch.ValidateResponse
+	for attempt := 0; ; attempt++ {
+		if val, err = s.oauth.Validate(ctx, tok.AccessToken); err == nil || attempt >= 2 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
+		}
+	}
 	if err != nil {
 		return err
 	}
+	if !hasScope(val.Scopes, Scope) {
+		return ErrBadScope
+	}
+	user := struct{ ID, Login string }{val.UserID, val.Login}
 	accessEnc, err := s.box.Seal(tok.AccessToken)
 	if err != nil {
 		return err

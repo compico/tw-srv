@@ -126,13 +126,20 @@ func (e *EventSub) session(ctx context.Context, src TokenSource, broadcasterID, 
 
 	timeout := keepaliveTimeout(welcome)
 	seen := newSeenSet(128)
+	// Для диагностики обрывов: сколько прожила сессия и когда пришло последнее сообщение.
+	started := time.Now()
+	last := started
+	msgs := 0
 	for {
 		conn := cur.Load()
 		_ = conn.SetReadDeadline(time.Now().Add(timeout))
 		_, data, err := conn.ReadMessage()
 		if err != nil {
-			return err
+			return fmt.Errorf("after %s alive, %d messages, silent for %s: %w",
+				time.Since(started).Round(time.Second), msgs, time.Since(last).Round(time.Second), err)
 		}
+		msgs++
+		last = time.Now()
 		var env envelope
 		if json.Unmarshal(data, &env) != nil {
 			continue
